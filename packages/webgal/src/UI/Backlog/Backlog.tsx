@@ -127,10 +127,24 @@ export const Backlog = () => {
                 <div
                   onClick={() => {
                     playSeClick();
+                    // 暂停其他所有正在播放的 backlog 语音，避免多条音频混合
+                    const currentAudioId = 'backlog_audio_play_element_' + indexOfBacklog;
+                    document
+                      .querySelectorAll('[id^="backlog_audio_play_element_"]')
+                      .forEach((audio: any) => {
+                        if (audio.id !== currentAudioId) {
+                          audio.pause();
+                          audio.currentTime = 0;
+                        }
+                      });
+                    // 暂停游戏内正在播放的语音，避免与 backlog 语音混合
+                    const currentVocal = document.getElementById('currentVocal') as HTMLAudioElement | null;
+                    if (currentVocal) {
+                      currentVocal.pause();
+                      currentVocal.currentTime = 0;
+                    }
                     // 获取到播放 backlog 语音的元素
-                    const backlog_audio_element: any = document.getElementById(
-                      'backlog_audio_play_element_' + indexOfBacklog,
-                    );
+                    const backlog_audio_element: any = document.getElementById(currentAudioId);
                     if (backlog_audio_element) {
                       backlog_audio_element.currentTime = 0;
                       const userDataStore = webgalStore.getState().userData;
