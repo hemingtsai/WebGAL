@@ -3,11 +3,18 @@ import {
   createRequestEnvelope,
   createResponseEnvelope,
   EDITOR_PREVIEW_PROTOCOL_V1_SUBPROTOCOL,
+  isPreviewCommandType,
   isPreviewRequestEnvelope,
   isProtocolEnvelope,
-  PreviewRequestPayloadByType,
+} from '@/types/editorPreviewProtocol';
+import type {
+  FastPreviewTimeoutPayload,
+  PreviewCommandPayloadByType,
+  PreviewCommandResponsePayloadByType,
+  PreviewCommandType,
+  PreviewQueryType,
   PreviewRequestType,
-  PreviewResponsePayloadByType,
+  ProtocolEnvelope,
   RunSceneContentPayload,
   RunSnippetPayload,
   SetComponentVisibilityPayload,
@@ -16,8 +23,7 @@ import {
   SetTextReadModePayload,
   StageSnapshotUpdatedPayload,
   SyncScenePayload,
-  FastPreviewTimeoutPayload,
-} from '../../../types/editorPreviewProtocol';
+} from '@/types/editorPreviewProtocol';
 import { webgalStore } from '@/store/store';
 import { setFontOptimization, setVisibility } from '@/store/GUIReducer';
 import { WebGAL } from '@/Core/WebGAL';
@@ -40,6 +46,7 @@ import {
 import { executePreviewSyncSceneCommand } from './runtime/previewSyncSceneCommand';
 import { setDebugTextReadMode } from '@/Core/Modules/readHistory';
 import { applyPreviewDebugVariables } from './runtime/previewDebugVariables';
+import { handleReferenceBoxQuery } from './runtime/handlers/referenceBoxQueryHandler';
 
 let previewSyncRuntimeStarted = false;
 type StageStateSnapshot = IStageState;
@@ -49,6 +56,10 @@ interface RegisterPreviewLogContext {
   gameId: string | undefined;
   embeddedLaunchId: string | undefined;
 }
+
+type PreviewRequestEnvelope = Extract<ProtocolEnvelope, { kind: 'request'; type: PreviewRequestType }>;
+type PreviewQueryEnvelope = Extract<PreviewRequestEnvelope, { type: PreviewQueryType }>;
+type PreviewQueryHandler = (envelope: PreviewQueryEnvelope) => void;
 
 export const startPreviewSyncRuntime = () => {
   if (previewSyncRuntimeStarted) {
@@ -73,6 +84,7 @@ export const startPreviewSyncRuntime = () => {
   let registered = false;
   let pendingRegisterRequestId: string | null = null;
   let pendingRegisterContext: RegisterPreviewLogContext | null = null;
+  let isEmbeddedPreview = false;
   let lastPublishedSceneName: string | null = null;
   let lastPublishedSentenceId: number | null = null;
   let lastPublishedStageState: StageStateSnapshot | null = null;
@@ -86,6 +98,7 @@ export const startPreviewSyncRuntime = () => {
     registered = false;
     pendingRegisterRequestId = null;
     pendingRegisterContext = null;
+    isEmbeddedPreview = false;
     lastPublishedSceneName = null;
     lastPublishedSentenceId = null;
     lastPublishedStageState = null;
@@ -155,6 +168,20 @@ export const startPreviewSyncRuntime = () => {
         embeddedLaunchId,
       }),
     );
+  };
+
+  const finishRegisterPreview = () => {
+    const registeredPreviewContext = pendingRegisterContext;
+    if (registeredPreviewContext) {
+      logger.info('编辑器同步 V1 注册完成', registeredPreviewContext);
+    }
+
+    pendingRegisterRequestId = null;
+    pendingRegisterContext = null;
+    registered = true;
+    isEmbeddedPreview = Boolean(registeredPreviewContext?.embeddedLaunchId);
+    publishReady();
+    publishStageSnapshot(true);
   };
 
   const emitFastPreviewTimeout = (payload: FastPreviewTimeoutPayload) => {
@@ -253,8 +280,8 @@ export const startPreviewSyncRuntime = () => {
     });
   };
 
-  const previewRequestHandlers: {
-    [K in PreviewRequestType]: (payload: PreviewRequestPayloadByType[K]) => PreviewResponsePayloadByType[K];
+  const previewCommandHandlers: {
+    [K in PreviewCommandType]: (payload: PreviewCommandPayloadByType[K]) => PreviewCommandResponsePayloadByType[K];
   } = {
     'preview.command.sync-scene': (payload: SyncScenePayload) => {
       handleSyncScene(payload);
@@ -290,15 +317,83 @@ export const startPreviewSyncRuntime = () => {
     },
   };
 
-  const handlePreviewRequest = <TType extends PreviewRequestType>(
+  const previewQueryHandlers: Record<PreviewQueryType, PreviewQueryHandler> = {
+    'preview.query.reference-box': (envelope) => {
+      transport.send(handleReferenceBoxQuery(envelope, WebGAL.gameplay.pixiStage, isEmbeddedPreview));
+    },
+  };
+
+  const isPreviewQueryEnvelope = (envelope: PreviewRequestEnvelope): envelope is PreviewQueryEnvelope => {
+    return envelope.type in previewQueryHandlers;
+  };
+
+  const handlePreviewCommand = <TType extends PreviewCommandType>(
     type: TType,
-    payload: PreviewRequestPayloadByType[TType],
-  ): PreviewResponsePayloadByType[TType] => {
-    const handler = previewRequestHandlers[type] as (
-      nextPayload: PreviewRequestPayloadByType[TType],
-    ) => PreviewResponsePayloadByType[TType];
+    payload: PreviewCommandPayloadByType[TType],
+  ): PreviewCommandResponsePayloadByType[TType] => {
+    const handler = previewCommandHandlers[type] as (
+      nextPayload: PreviewCommandPayloadByType[TType],
+    ) => PreviewCommandResponsePayloadByType[TType];
 
     return handler(payload);
+  };
+
+  const respondToPreviewRequest = (envelope: PreviewRequestEnvelope) => {
+    if (isPreviewQueryEnvelope(envelope)) {
+      previewQueryHandlers[envelope.type](envelope);
+      return;
+    }
+
+    if (!isPreviewCommandType(envelope.type)) {
+      logger.warn(`收到未支持的编辑器同步 V1 请求：${envelope.type}`);
+      return;
+    }
+
+    const responsePayload = handlePreviewCommand(envelope.type, envelope.payload);
+    transport.send(createResponseEnvelope(envelope.type, envelope.requestId, responsePayload));
+  };
+
+  const handleProtocolEnvelope = (envelope: ProtocolEnvelope) => {
+    if (envelope.kind === 'response' && envelope.type === 'session.register-preview') {
+      if (pendingRegisterRequestId !== null && envelope.requestId === pendingRegisterRequestId) {
+        finishRegisterPreview();
+      }
+      return;
+    }
+
+    if (!registered) {
+      if (envelope.kind === 'request') {
+        logger.warn(`收到注册完成前的编辑器同步 V1 请求：${envelope.type}`);
+      }
+      return;
+    }
+
+    if (!isPreviewRequestEnvelope(envelope)) {
+      if (envelope.kind === 'request') {
+        logger.warn(`收到未支持的编辑器同步 V1 请求：${envelope.type}`);
+      }
+      return;
+    }
+
+    try {
+      respondToPreviewRequest(envelope);
+    } catch (error) {
+      logger.error(`执行编辑器同步 V1 请求失败：${envelope.type}`, error);
+    }
+  };
+
+  const handleRawMessage = (rawData: unknown) => {
+    try {
+      const envelope = JSON.parse(String(rawData)) as unknown;
+      if (!isProtocolEnvelope(envelope)) {
+        logger.warn('收到无法识别的编辑器同步 V1 消息');
+        return;
+      }
+
+      handleProtocolEnvelope(envelope);
+    } catch (error) {
+      logger.error('解析编辑器同步 V1 消息失败', error);
+    }
   };
 
   transport = createPreviewSyncTransport({
@@ -306,57 +401,7 @@ export const startPreviewSyncRuntime = () => {
     subprotocol: EDITOR_PREVIEW_PROTOCOL_V1_SUBPROTOCOL,
     onConnecting: resetRegistrationState,
     onOpen: registerPreview,
-    onMessage: (rawData) => {
-      try {
-        const envelope = JSON.parse(String(rawData)) as unknown;
-        if (!isProtocolEnvelope(envelope)) {
-          logger.warn('收到无法识别的编辑器同步 V1 消息');
-          return;
-        }
-
-        if (envelope.kind === 'response' && envelope.type === 'session.register-preview') {
-          if (pendingRegisterRequestId === null || envelope.requestId !== pendingRegisterRequestId) {
-            return;
-          }
-
-          if (pendingRegisterContext) {
-            logger.info('编辑器同步 V1 注册完成', pendingRegisterContext);
-          }
-          pendingRegisterRequestId = null;
-          pendingRegisterContext = null;
-          registered = true;
-          publishReady();
-          publishStageSnapshot(true);
-          return;
-        }
-
-        if (!registered) {
-          if (envelope.kind === 'request') {
-            logger.warn(`收到注册完成前的编辑器同步 V1 请求：${envelope.type}`);
-          }
-          return;
-        }
-
-        if (!isPreviewRequestEnvelope(envelope)) {
-          if (envelope.kind === 'request') {
-            logger.warn(`收到未支持的编辑器同步 V1 请求：${envelope.type}`);
-          }
-          return;
-        }
-
-        let responsePayload: PreviewResponsePayloadByType[typeof envelope.type];
-        try {
-          responsePayload = handlePreviewRequest(envelope.type, envelope.payload);
-        } catch (error) {
-          logger.error(`执行编辑器同步 V1 命令失败：${envelope.type}`, error);
-          return;
-        }
-
-        transport.send(createResponseEnvelope(envelope.type, envelope.requestId, responsePayload));
-      } catch (error) {
-        logger.error('解析编辑器同步 V1 消息失败', error);
-      }
-    },
+    onMessage: handleRawMessage,
     onClose: resetRegistrationState,
     logInfo: (message) => logger.info(message),
     logError: (message, error) => logger.error(message, error),

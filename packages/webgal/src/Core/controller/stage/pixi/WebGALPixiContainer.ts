@@ -328,6 +328,34 @@ const PROPERTY_CONFIGS: Record<string, PropertyConfig> = {
   },
 };
 
+function getChildReferenceBounds(child: PIXI.DisplayObject, containerPivot: PIXI.IPointData): PIXI.Rectangle {
+  child.transform.updateLocalTransform();
+  const bounds = child.getLocalBounds();
+  const transform = child.transform.localTransform;
+  const left = bounds.x * child.scale.x + transform.tx - containerPivot.x;
+  const right = (bounds.x + bounds.width) * child.scale.x + transform.tx - containerPivot.x;
+  const top = bounds.y * child.scale.y + transform.ty - containerPivot.y;
+  const bottom = (bounds.y + bounds.height) * child.scale.y + transform.ty - containerPivot.y;
+
+  return new PIXI.Rectangle(
+    Math.min(left, right),
+    Math.min(top, bottom),
+    Math.abs(right - left),
+    Math.abs(bottom - top),
+  );
+}
+
+function mergeBounds(target: PIXI.Rectangle, next: PIXI.Rectangle): void {
+  const minX = Math.min(target.x, next.x);
+  const minY = Math.min(target.y, next.y);
+  const maxX = Math.max(target.x + target.width, next.x + next.width);
+  const maxY = Math.max(target.y + target.height, next.y + next.height);
+  target.x = minX;
+  target.y = minY;
+  target.width = maxX - minX;
+  target.height = maxY - minY;
+}
+
 export class WebGALPixiContainer extends PIXI.Container {
   public containerFilters = new Map<string, PIXI.Filter>();
   private filterToName = new Map<PIXI.Filter, string>();
@@ -413,6 +441,33 @@ export class WebGALPixiContainer extends PIXI.Container {
     const old = this.y;
     this.baseY = y;
     this.y = old;
+  }
+
+  public getBasePosition(): { x: number; y: number } {
+    return {
+      x: this.baseX,
+      y: this.baseY,
+    };
+  }
+
+  public getReferenceLocalBounds(): PIXI.Rectangle | undefined {
+    if (this.children.length === 0) {
+      return undefined;
+    }
+
+    let referenceBounds: PIXI.Rectangle | undefined;
+    for (const child of this.children) {
+      const localBounds = getChildReferenceBounds(child, this.pivot);
+
+      if (!referenceBounds) {
+        referenceBounds = localBounds;
+        continue;
+      }
+
+      mergeBounds(referenceBounds, localBounds);
+    }
+
+    return referenceBounds;
   }
 
   // --- Standard Filters ---

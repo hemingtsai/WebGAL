@@ -14,6 +14,7 @@ import * as PIXI from 'pixi.js';
 import { INSTALLED } from 'pixi.js';
 import { GifResource } from './GifResource';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
+import { queryStageObjectReferenceBox, QueryTargetReferenceBoxResult } from './referenceBox';
 
 export interface IAnimationObject {
   setStartState: Function;
@@ -1028,6 +1029,13 @@ export default class PixiStage {
    */
   public getStageObjByKey(key: string) {
     return [...this.figureObjects, ...this.backgroundObjects, this.mainStageObject].find((e) => e.key === key);
+  }
+
+  public queryTargetReferenceBox(target: string): QueryTargetReferenceBoxResult {
+    return queryStageObjectReferenceBox(target, this.getStageObjByKey(target), {
+      width: this.stageWidth,
+      height: this.stageHeight,
+    });
   }
 
   public getStageObjByUuid(objUuid: string) {

@@ -5,7 +5,7 @@ export const EDITOR_PREVIEW_PROTOCOL_V1_SUBPROTOCOL = 'webgal-editor-preview-syn
 
 type EmptyObject = Record<string, never>;
 
-export interface DebugVariablePayload {
+export interface DebugVariable {
   key: string;
   value: string;
   isGlobal?: boolean;
@@ -14,17 +14,17 @@ export interface DebugVariablePayload {
 export interface SyncScenePayload {
   sceneName: string;
   sentenceId: number;
-  debugVariables?: DebugVariablePayload[];
+  debugVariables?: DebugVariable[];
 }
 
 export interface RunSceneContentPayload {
   sceneContent: string;
-  debugVariables?: DebugVariablePayload[];
+  debugVariables?: DebugVariable[];
 }
 
 export interface RunSnippetPayload {
   snippet: string;
-  debugVariables?: DebugVariablePayload[];
+  debugVariables?: DebugVariable[];
 }
 
 export type ReloadTemplatesPayload = EmptyObject;
@@ -46,6 +46,33 @@ export interface SetFontOptimizationPayload {
 export interface SetTextReadModePayload {
   isRead: boolean;
 }
+
+export interface ReferenceBoxQueryPayload {
+  target: string;
+}
+
+export interface ReferenceBox {
+  originX: number;
+  originY: number;
+  width: number;
+  height: number;
+  anchorX: number;
+  anchorY: number;
+  stageWidth: number;
+  stageHeight: number;
+}
+
+export type ReferenceBoxQueryResultPayload =
+  | {
+      target: string;
+      status: 'ready';
+      box: ReferenceBox;
+    }
+  | {
+      target: string;
+      status: 'missing' | 'loading' | 'unsupported';
+      reason?: string;
+    };
 
 export interface PreviewCommandPayloadByType {
   'preview.command.sync-scene': SyncScenePayload;
@@ -71,11 +98,24 @@ const PREVIEW_COMMAND_TYPES = [
   'preview.command.set-text-read-mode',
 ] as const satisfies readonly PreviewCommandType[];
 
-export interface PreviewRequestPayloadByType extends PreviewCommandPayloadByType {}
+export interface PreviewQueryPayloadByType {
+  'preview.query.reference-box': ReferenceBoxQueryPayload;
+}
+
+export type PreviewQueryType = keyof PreviewQueryPayloadByType;
+
+const PREVIEW_QUERY_TYPES = [
+  'preview.query.reference-box',
+] as const satisfies readonly PreviewQueryType[];
+
+export interface PreviewRequestPayloadByType extends PreviewCommandPayloadByType, PreviewQueryPayloadByType {}
 
 export type PreviewRequestType = keyof PreviewRequestPayloadByType;
 
-const PREVIEW_REQUEST_TYPES = [...PREVIEW_COMMAND_TYPES] as const satisfies readonly PreviewRequestType[];
+const PREVIEW_REQUEST_TYPES = [
+  ...PREVIEW_COMMAND_TYPES,
+  ...PREVIEW_QUERY_TYPES,
+] as const satisfies readonly PreviewRequestType[];
 
 type JsonPrimitive = string | number | boolean | null;
 type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
@@ -130,7 +170,13 @@ interface RequestPayloadByType extends SessionRequestPayloadByType, PreviewReque
 
 export interface PreviewCommandResponsePayloadByType extends Record<PreviewCommandType, EmptyObject> {}
 
-export interface PreviewResponsePayloadByType extends PreviewCommandResponsePayloadByType {}
+export interface PreviewQueryResponsePayloadByType {
+  'preview.query.reference-box': ReferenceBoxQueryResultPayload;
+}
+
+export interface PreviewResponsePayloadByType extends PreviewCommandResponsePayloadByType, PreviewQueryResponsePayloadByType {}
+
+export type PreviewResponseType = PreviewRequestType
 
 interface SessionResponsePayloadByType {
   'session.register-preview': EmptyObject;
@@ -251,6 +297,10 @@ export function isPreviewRequestType(value: unknown): value is PreviewRequestTyp
   return isMessageType(value, PREVIEW_REQUEST_TYPES);
 }
 
+export function isPreviewResponseType(value: unknown): value is PreviewResponseType {
+  return isPreviewRequestType(value)
+}
+
 export function isHostEventType(value: unknown): value is HostEventType {
   return isMessageType(value, HOST_EVENT_TYPES);
 }
@@ -265,4 +315,8 @@ export function isPreviewCommandRequestEnvelope(value: unknown): value is Reques
 
 export function isPreviewRequestEnvelope(value: unknown): value is RequestEnvelopeByType<PreviewRequestType> {
   return isRequestEnvelope(value) && isPreviewRequestType(value.type);
+}
+
+export function isPreviewResponseEnvelope(value: unknown): value is ResponseEnvelopeByType<PreviewResponseType> {
+  return isResponseEnvelope(value) && isPreviewResponseType(value.type)
 }
