@@ -63,8 +63,6 @@ export const playVideo = (sentence: ISentence): IPerform => {
         if (VocalControl !== null) {
           VocalControl.currentTime = 0;
           VocalControl.volume = bgmVol;
-          // 双击可跳过视频
-          WebGAL.events.fullscreenDbClick.on(skipVideo);
           /**
            * 把bgm和语音的音量设为0
            */
@@ -78,6 +76,9 @@ export const playVideo = (sentence: ISentence): IPerform => {
           }
 
           VocalControl?.play().catch(() => {});
+          if (!blockingNextFlag) {
+            WebGAL.events.fullscreenDbClick.on(skipVideo);
+          }
 
           VocalControl.onended = () => {
             endPerform();
