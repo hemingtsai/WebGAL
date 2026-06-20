@@ -6,6 +6,10 @@ import axios from 'axios';
  */
 export const sceneFetcher = (sceneUrl: string) => {
   return new Promise<string>((resolve, reject) => {
+    if (!sceneUrl.endsWith('.txt')) {
+      reject('Scene file must be a txt file');
+      return;
+    }
     axios
       .get(sceneUrl)
       .then((response) => {
