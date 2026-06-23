@@ -253,7 +253,10 @@ export const startPreviewSyncRuntime = () => {
         const isSyncSettled = isTargetTransformBaselineSyncSettled(result, payload);
         if (!isSyncSettled || !targetTransformBaselines.publishCapturedSnapshot(transformBaselineRevision)) {
           targetTransformBaselines.failRevision(transformBaselineRevision);
+          return;
         }
+
+        setEffectBaselines.clear();
       },
     });
   };
@@ -321,29 +324,20 @@ export const startPreviewSyncRuntime = () => {
     setDebugTextReadMode(payload.isRead);
   };
 
-  const getSetEffectBaseline = (target: string): ITransform | undefined => {
+  const getSetEffectBaseline = (target: string): ITransform => {
     const cachedBaseline = setEffectBaselines.get(target);
     if (cachedBaseline) {
       return cachedBaseline;
     }
 
     const baselineOverride = targetTransformBaselines.getReadyTransformBaselineOverride(target);
-    if (baselineOverride === undefined) {
-      return undefined;
-    }
-
     const baseline = mergeSetEffectPreviewTransform(baseTransform, baselineOverride);
     setEffectBaselines.set(target, baseline);
     return baseline;
   };
 
   const handleSetEffect = (payload: SetEffectPayload) => {
-    targetTransformBaselines.invalidatePendingRevision();
     const baseline = getSetEffectBaseline(payload.target);
-    if (!baseline) {
-      return;
-    }
-
     const newTransform = mergeSetEffectPreviewTransform(baseline, payload.transform);
     WebGAL.gameplay.pixiStage?.removeAnimationByTargetKey(payload.target);
     stageStateManager.updateEffectAndCommit({

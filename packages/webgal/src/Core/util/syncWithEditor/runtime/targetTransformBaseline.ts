@@ -47,7 +47,6 @@ interface TargetTransformBaselineManager {
   captureSnapshot: (revision: string, stageState: IStageState) => void;
   publishCapturedSnapshot: (revision: string) => boolean;
   failRevision: (revision: string) => void;
-  invalidatePendingRevision: () => void;
   invalidateCurrentRevision: () => void;
   getReadyTransformBaselineOverride: (target: string) => ITransform | undefined;
   queryTransformBaseline: (target: string, revision: string) => TransformBaselineQueryResultPayload;
@@ -122,17 +121,6 @@ export function createTargetTransformBaselineManager(): TargetTransformBaselineM
       revisionState = {
         status: 'unavailable',
         revision,
-      };
-    },
-
-    invalidatePendingRevision() {
-      if (revisionState.status !== 'pending') {
-        return;
-      }
-
-      revisionState = {
-        status: 'unavailable',
-        revision: revisionState.revision,
       };
     },
 
