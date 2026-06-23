@@ -321,23 +321,30 @@ export const startPreviewSyncRuntime = () => {
     setDebugTextReadMode(payload.isRead);
   };
 
-  const getSetEffectBaseline = (target: string): ITransform => {
+  const getSetEffectBaseline = (target: string): ITransform | undefined => {
     const cachedBaseline = setEffectBaselines.get(target);
     if (cachedBaseline) {
       return cachedBaseline;
     }
 
-    const currentTransform = stageStateManager
-      .getCalculationStageState()
-      .effects.find((effect) => effect.target === target)?.transform;
-    const baseline = mergeSetEffectPreviewTransform(baseTransform, currentTransform);
+    const baselineOverride = targetTransformBaselines.getReadyTransformBaselineOverride(target);
+    if (baselineOverride === undefined) {
+      return undefined;
+    }
+
+    const baseline = mergeSetEffectPreviewTransform(baseTransform, baselineOverride);
     setEffectBaselines.set(target, baseline);
     return baseline;
   };
 
   const handleSetEffect = (payload: SetEffectPayload) => {
     targetTransformBaselines.invalidatePendingRevision();
-    const newTransform = mergeSetEffectPreviewTransform(getSetEffectBaseline(payload.target), payload.transform);
+    const baseline = getSetEffectBaseline(payload.target);
+    if (!baseline) {
+      return;
+    }
+
+    const newTransform = mergeSetEffectPreviewTransform(baseline, payload.transform);
     WebGAL.gameplay.pixiStage?.removeAnimationByTargetKey(payload.target);
     stageStateManager.updateEffectAndCommit({
       target: payload.target,

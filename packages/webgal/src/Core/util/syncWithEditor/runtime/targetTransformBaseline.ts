@@ -49,6 +49,7 @@ interface TargetTransformBaselineManager {
   failRevision: (revision: string) => void;
   invalidatePendingRevision: () => void;
   invalidateCurrentRevision: () => void;
+  getReadyTransformBaselineOverride: (target: string) => ITransform | undefined;
   queryTransformBaseline: (target: string, revision: string) => TransformBaselineQueryResultPayload;
 }
 
@@ -146,6 +147,14 @@ export function createTargetTransformBaselineManager(): TargetTransformBaselineM
       };
     },
 
+    getReadyTransformBaselineOverride(target) {
+      if (revisionState.status !== 'ready') {
+        return undefined;
+      }
+
+      return getSnapshotTransformOverride(revisionState.snapshot, target);
+    },
+
     queryTransformBaseline(target, revision) {
       if (!isLatestRevision(revision)) {
         return {
@@ -192,17 +201,26 @@ function createSnapshot(stageState: IStageState): TargetTransformBaselineSnapsho
 }
 
 function querySnapshot(snapshot: TargetTransformBaselineSnapshot, target: string): TransformBaselineQueryResultPayload {
-  if (!snapshot.knownTargets.has(target)) {
+  const transform = getSnapshotTransformOverride(snapshot, target);
+  if (transform === undefined) {
     return {
       status: 'unavailable',
     };
   }
 
-  const transform = snapshot.transformsByTarget.get(target);
   return {
     status: 'ready',
-    transform: transform ? createSparseTransformOverride(transform, baseTransform) : {},
+    transform,
   };
+}
+
+function getSnapshotTransformOverride(snapshot: TargetTransformBaselineSnapshot, target: string): ITransform | undefined {
+  if (!snapshot.knownTargets.has(target)) {
+    return undefined;
+  }
+
+  const transform = snapshot.transformsByTarget.get(target);
+  return transform ? createSparseTransformOverride(transform, baseTransform) : {};
 }
 
 function createSparseTransformOverride(transform: ITransform, base: ITransform): ITransform {
