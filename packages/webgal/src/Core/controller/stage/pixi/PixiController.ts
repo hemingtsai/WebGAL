@@ -14,7 +14,7 @@ import * as PIXI from 'pixi.js';
 import { INSTALLED } from 'pixi.js';
 import { GifResource } from './GifResource';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
-import { queryStageObjectReferenceBox, QueryTargetReferenceBoxResult } from './referenceBox';
+import { queryStageObjectReferenceBox, type QueryTargetReferenceBoxResult } from './referenceBox';
 
 export interface IAnimationObject {
   setStartState: Function;

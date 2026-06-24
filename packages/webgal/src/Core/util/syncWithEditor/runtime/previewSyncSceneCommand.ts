@@ -137,6 +137,7 @@ export async function runFastPreview(
       }
 
       if (!isForwarded && !awaitedSceneWrite) {
+        stopReason = 'no-progress';
         break;
       }
 

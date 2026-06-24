@@ -5,7 +5,6 @@ import {
   createResponseEnvelope,
   EDITOR_PREVIEW_PROTOCOL_V1_SUBPROTOCOL,
   isAnyProtocolEnvelope,
-  isPreviewCommandType,
   isPreviewQueryType,
   isPreviewRequestEnvelope,
 } from '@/types/editorPreviewProtocol';
@@ -99,7 +98,6 @@ export const startPreviewSyncRuntime = () => {
   let registered = false;
   let pendingRegisterRequestId: string | null = null;
   let pendingRegisterContext: RegisterPreviewLogContext | null = null;
-  let isEmbeddedPreview = false;
   let lastPublishedSceneName: string | null = null;
   let lastPublishedSentenceId: number | null = null;
   let lastPublishedStageState: StageStateSnapshot | null = null;
@@ -130,7 +128,6 @@ export const startPreviewSyncRuntime = () => {
     registered = false;
     pendingRegisterRequestId = null;
     pendingRegisterContext = null;
-    isEmbeddedPreview = false;
     lastPublishedSceneName = null;
     lastPublishedSentenceId = null;
     lastPublishedStageState = null;
@@ -212,7 +209,6 @@ export const startPreviewSyncRuntime = () => {
     pendingRegisterRequestId = null;
     pendingRegisterContext = null;
     registered = true;
-    isEmbeddedPreview = Boolean(registeredPreviewContext?.embeddedLaunchId);
     publishReady();
     publishStageSnapshot(true);
   };
@@ -390,7 +386,7 @@ export const startPreviewSyncRuntime = () => {
   const handlePreviewQuery = (envelope: PreviewQueryEnvelope) => {
     switch (envelope.type) {
       case 'preview.query.reference-box':
-        void handleReferenceBoxQuery(envelope, WebGAL.gameplay.pixiStage, isEmbeddedPreview)
+        void handleReferenceBoxQuery(envelope, WebGAL.gameplay.pixiStage)
           .then((response) => {
             transport.send(response);
           })
@@ -435,12 +431,6 @@ export const startPreviewSyncRuntime = () => {
   const respondToPreviewRequest = (envelope: PreviewRequestEnvelope) => {
     if (isPreviewQueryEnvelope(envelope)) {
       handlePreviewQuery(envelope);
-      return;
-    }
-
-    if (!isPreviewCommandType(envelope.type)) {
-      logger.warn(`收到未支持的编辑器同步 V1 请求：${envelope.type}`);
-      sendRequestError(envelope, 'unsupported-request-type', UNSUPPORTED_REQUEST_MESSAGE);
       return;
     }
 
