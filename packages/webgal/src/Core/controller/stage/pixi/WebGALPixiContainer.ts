@@ -331,18 +331,29 @@ const PROPERTY_CONFIGS: Record<string, PropertyConfig> = {
 function getChildReferenceBounds(child: PIXI.DisplayObject, containerPivot: PIXI.IPointData): PIXI.Rectangle {
   child.transform.updateLocalTransform();
   const bounds = child.getLocalBounds();
-  const transform = child.transform.localTransform;
-  const left = bounds.x * child.scale.x + transform.tx - containerPivot.x;
-  const right = (bounds.x + bounds.width) * child.scale.x + transform.tx - containerPivot.x;
-  const top = bounds.y * child.scale.y + transform.ty - containerPivot.y;
-  const bottom = (bounds.y + bounds.height) * child.scale.y + transform.ty - containerPivot.y;
+  const { a, b, c, d, tx, ty } = child.transform.localTransform;
+  const x0 = bounds.x;
+  const x1 = bounds.x + bounds.width;
+  const y0 = bounds.y;
+  const y1 = bounds.y + bounds.height;
+  const pivotX = containerPivot.x;
+  const pivotY = containerPivot.y;
 
-  return new PIXI.Rectangle(
-    Math.min(left, right),
-    Math.min(top, bottom),
-    Math.abs(right - left),
-    Math.abs(bottom - top),
-  );
+  const p0x = a * x0 + c * y0 + tx - pivotX;
+  const p0y = b * x0 + d * y0 + ty - pivotY;
+  const p1x = a * x1 + c * y0 + tx - pivotX;
+  const p1y = b * x1 + d * y0 + ty - pivotY;
+  const p2x = a * x0 + c * y1 + tx - pivotX;
+  const p2y = b * x0 + d * y1 + ty - pivotY;
+  const p3x = a * x1 + c * y1 + tx - pivotX;
+  const p3y = b * x1 + d * y1 + ty - pivotY;
+
+  const minX = Math.min(p0x, p1x, p2x, p3x);
+  const minY = Math.min(p0y, p1y, p2y, p3y);
+  const maxX = Math.max(p0x, p1x, p2x, p3x);
+  const maxY = Math.max(p0y, p1y, p2y, p3y);
+
+  return new PIXI.Rectangle(minX, minY, maxX - minX, maxY - minY);
 }
 
 function mergeBounds(target: PIXI.Rectangle, next: PIXI.Rectangle): void {
