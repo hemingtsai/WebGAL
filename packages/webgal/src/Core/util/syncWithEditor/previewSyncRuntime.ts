@@ -39,6 +39,7 @@ import { logger } from '@/Core/util/logger';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import { baseTransform } from '@/Core/Modules/stage/stageInterface';
 import type { IStageState, ITransform } from '@/Core/Modules/stage/stageInterface';
+import { applyStageEffectToTarget } from '@/Core/controller/stage/pixi/syncPixiStageState';
 import { mergeSetEffectPreviewTransform } from './previewSetEffectTransform';
 import { requestEmbeddedLaunchId } from './runtime/embeddedPreviewBootstrap';
 import {
@@ -336,6 +337,11 @@ export const startPreviewSyncRuntime = () => {
     const baseline = getSetEffectBaseline(payload.target);
     const newTransform = mergeSetEffectPreviewTransform(baseline, payload.transform);
     WebGAL.gameplay.pixiStage?.removeAnimationByTargetKey(payload.target);
+    if (payload.phase === 'preview') {
+      applyStageEffectToTarget(payload.target, newTransform);
+      return;
+    }
+
     stageStateManager.updateEffectAndCommit({
       target: payload.target,
       transform: newTransform,

@@ -1,14 +1,12 @@
-import { baseTransform } from '@/Core/Modules/stage/stageInterface';
 import type { IEffect, IStageState, ITransform } from '@/Core/Modules/stage/stageInterface';
 import type { IResolvedStageCommitOptions } from '@/Core/Modules/stage/stageStateManager';
 import { DEFAULT_BG_OUT_DURATION } from '@/Core/constants';
 import { WebGAL } from '@/Core/WebGAL';
-import PixiStage from '@/Core/controller/stage/pixi/PixiController';
 import type { IStageObject } from '@/Core/controller/stage/pixi/PixiController';
 import { getEnterExitAnimation } from '@/Core/Modules/animationFunctions';
 import { logger } from '@/Core/util/logger';
 import { setEbg } from '@/Core/gameScripts/changeBg/setEbg';
-import { isUndefined, omitBy } from 'lodash';
+import { applyTransformToPixiContainer } from '@/Core/controller/stage/pixi/stageEffectTransform';
 
 export function syncPixiStageState(stageState: IStageState, options: IResolvedStageCommitOptions) {
   if (options.syncPixiStage) {
@@ -31,12 +29,22 @@ export function applyStageEffects(effects: IEffect[]) {
     const key = stageObj.key;
     if (lockedStageTargets.includes(key)) continue;
     const effect = effects.find((effect) => effect.target === key);
-    const targetPixiContainer = pixiStage.getStageObjByKey(key);
-    const container = targetPixiContainer?.pixiContainer;
+    const container = stageObj.pixiContainer;
     if (!container) continue;
-    // @ts-ignore WebGALPixiContainer exposes transform-like fields.
-    PixiStage.assignTransform(container, convertTransform(effect?.transform ?? baseTransform));
+    applyTransformToPixiContainer(container, effect?.transform);
   }
+  pixiStage.requestRender();
+}
+
+export function applyStageEffectToTarget(target: string, transform: ITransform | undefined) {
+  const pixiStage = WebGAL.gameplay.pixiStage;
+  if (!pixiStage) return;
+  if (pixiStage.getAllLockedObject().includes(target)) return;
+
+  const container = pixiStage.getStageObjByKey(target)?.pixiContainer;
+  if (!container) return;
+
+  applyTransformToPixiContainer(container, transform);
   pixiStage.requestRender();
 }
 
@@ -229,12 +237,4 @@ function addFigure(key: string, url: string, position: 'left' | 'center' | 'righ
   } else {
     pixiStage.addFigure(key, url, position);
   }
-}
-
-function convertTransform(transform: ITransform | undefined) {
-  if (!transform) {
-    return {};
-  }
-  const { position, ...rest } = transform;
-  return omitBy({ ...rest, x: position?.x, y: position?.y }, isUndefined);
 }

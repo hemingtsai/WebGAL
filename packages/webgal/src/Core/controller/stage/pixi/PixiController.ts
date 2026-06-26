@@ -8,13 +8,12 @@ import { SCREEN_CONSTANTS } from '@/Core/util/constants';
 import { logger } from '@/Core/util/logger';
 import { v4 as uuid } from 'uuid';
 import { cloneDeep, isEqual } from 'lodash';
-import omitBy from 'lodash/omitBy';
-import isUndefined from 'lodash/isUndefined';
 import * as PIXI from 'pixi.js';
 import { INSTALLED } from 'pixi.js';
 import { GifResource } from './GifResource';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import { queryStageObjectReferenceBox, type QueryTargetReferenceBoxResult } from './referenceBox';
+import { assignPixiTransform } from './stageEffectTransform';
 
 export interface IAnimationObject {
   setStartState: Function;
@@ -70,21 +69,7 @@ INSTALLED.push(GifResource);
 
 export default class PixiStage {
   public static assignTransform<T extends ITransform>(target: T, source?: ITransform, convertAlpha = true) {
-    if (!source) return;
-    const targetScale = target.scale;
-    const targetPosition = target.position;
-    if (target.scale) Object.assign(targetScale!, omitBy(source.scale || {}, isUndefined));
-    if (target.position) Object.assign(targetPosition!, omitBy(source.position || {}, isUndefined));
-    Object.assign(target, omitBy(source, isUndefined));
-    target.scale = targetScale;
-    target.position = targetPosition;
-    if (convertAlpha) {
-      const sourceAlpha = source.alpha;
-      if (sourceAlpha !== undefined) {
-        target.alpha = 1;
-        (target as any).alphaFilterVal = sourceAlpha;
-      }
-    }
+    assignPixiTransform(target, source, convertAlpha);
   }
 
   /**
