@@ -12,6 +12,7 @@ import { getBooleanArgByKey, getStringArgByKey } from '@/Core/util/getSentenceAr
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import { jumpToLabel } from '@/Core/gameScripts/label/jumpToLabel';
 import { prefetchCurrentSceneByProgress } from '@/Core/util/prefetcher/progressPrefetcher';
+import { WEBGAL_NONE } from '@/Core/constants';
 
 const MAX_FORWARD_SCRIPT_EXECUTION = 1000;
 
@@ -91,6 +92,7 @@ export const scriptExecutor = (depth = 0) => {
   };
 
   variableInterpolation();
+  if (currentScript.content === WEBGAL_NONE) currentScript.content = '';
 
   // 判断这个脚本要不要执行
   let runThis = true;
