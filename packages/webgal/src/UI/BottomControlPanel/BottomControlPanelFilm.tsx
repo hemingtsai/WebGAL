@@ -49,8 +49,8 @@ export const BottomControlPanelFilm = () => {
                 <span
                   className={styles.singleButton}
                   onClick={() => {
-                    setComponentVisibility('showFlowchart', true);
-                    setComponentVisibility('showTextBox', false);
+                    setMenuPanel(MenuPanelTag.Flowchart);
+                    setComponentVisibility('showMenuPanel', true);
                     showPanel.set(!showPanel.value);
                   }}
                 >

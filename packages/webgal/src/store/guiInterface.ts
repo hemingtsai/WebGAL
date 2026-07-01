@@ -5,6 +5,7 @@ export enum MenuPanelTag {
   Save, // “保存”选项卡
   Load, // “读取”选项卡
   Option, // “设置”选项卡
+  Flowchart, // “流程图”选项卡
 }
 
 /**

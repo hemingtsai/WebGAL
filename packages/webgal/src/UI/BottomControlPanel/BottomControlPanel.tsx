@@ -150,8 +150,8 @@ export const BottomControlPanel = () => {
               className={styles.singleButton}
               style={{ fontSize }}
               onClick={() => {
-                setComponentVisibility('showFlowchart', true);
-                setComponentVisibility('showTextBox', false);
+                setMenuPanel(MenuPanelTag.Flowchart);
+                setComponentVisibility('showMenuPanel', true);
                 playSeClick();
               }}
               onMouseEnter={playSeEnter}

@@ -297,7 +297,9 @@ function useIsPanicOverlayOpen<T = any>(GUIStore: T & any): () => boolean {
 // 验证是否在存档 / 读档 / 选项页面
 function useValidMenuPanelTag<T = any>(GUIStore: T & any): () => boolean {
   return useCallback(() => {
-    return [MenuPanelTag.Save, MenuPanelTag.Load, MenuPanelTag.Option].includes(GUIStore.current.currentMenuTag);
+    return [MenuPanelTag.Save, MenuPanelTag.Load, MenuPanelTag.Option, MenuPanelTag.Flowchart].includes(
+      GUIStore.current.currentMenuTag,
+    );
   }, [GUIStore]);
 }
 
