@@ -33,7 +33,7 @@ import { WebGAL } from '@/Core/WebGAL';
 import { sceneParser, WebgalParser } from '@/Core/parser/sceneParser';
 import { ISentence } from '@/Core/controller/scene/sceneInterface';
 import { runScript } from '@/Core/controller/gamePlay/runScript';
-import { nextSentence } from '@/Core/controller/gamePlay/nextSentence';
+import { continueSentence } from '@/Core/controller/gamePlay/nextSentence';
 import { resetStage } from '@/Core/controller/stage/resetStage';
 import { logger } from '@/Core/util/logger';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
@@ -305,7 +305,7 @@ export const startPreviewSyncRuntime = () => {
       showPanicOverlay: false,
     });
     setTimeout(() => {
-      nextSentence();
+      continueSentence();
     }, 100);
   };
 
