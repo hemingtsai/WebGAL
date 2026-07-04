@@ -24,7 +24,7 @@ export const resetStage = (resetBacklog: boolean, resetSceneAndVar = true) => {
   // 清空舞台状态表
   const initSceneDataCopy = cloneDeep(initState);
   const currentVars = stageStateManager.getCalculationStageState().GameVar;
-  stageStateManager.resetAllStageState(initSceneDataCopy);
+  stageStateManager.resetAllStageState(initSceneDataCopy, { skipAnimation: true });
   if (!resetSceneAndVar) {
     stageStateManager.setStageAndCommit('GameVar', currentVars);
   }
