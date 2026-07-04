@@ -59,10 +59,6 @@ const autoPlay = () => {
   const data = webgalStore.getState().userData.optionData.autoSpeed;
   // 范围为 [250, 1750]
   const autoPlayDelay = 250 + (100 - data) * 15;
-  // Backlog 打开时不推进，避免在历史界面里自动播放导致剧情继续
-  if (webgalStore.getState().GUI.showBacklog) {
-    return;
-  }
   let isBlockingAuto = false;
   WebGAL.gameplay.performController.performList.forEach((e) => {
     if (e.blockingAuto())

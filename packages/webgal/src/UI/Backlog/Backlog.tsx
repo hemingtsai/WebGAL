@@ -10,6 +10,7 @@ import useTrans from '@/hooks/useTrans';
 import { compileSentence, EnhancedNode } from '@/Stage/TextBox/TextBox';
 import useSoundEffect from '@/hooks/useSoundEffect';
 import { WebGAL } from '@/Core/WebGAL';
+import { stopAuto } from '@/Core/controller/gamePlay/autoPlay';
 
 export const Backlog = () => {
   const t = useTrans('gaming.');
@@ -180,6 +181,7 @@ export const Backlog = () => {
   useEffect(() => {
     /* 切换为展示历史记录时触发 */
     if (GUIStore.showBacklog) {
+      stopAuto();
       // logger.info('展示backlog');
       // 立即清除 防止来回滚动时可能导致的错乱
       if (timeRef.current) {
