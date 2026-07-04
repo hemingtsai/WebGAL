@@ -106,6 +106,8 @@ export const startPreviewSyncRuntime = () => {
   const targetTransformBaselines = createTargetTransformBaselineManager();
   const embeddedLaunchIdPromise = requestEmbeddedLaunchId();
   let transport!: PreviewSyncTransport;
+  let nextSyncSceneRevision = 0;
+  let activeSyncSceneRevision: number | null = null;
 
   const createRequestId = () => `req-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -133,7 +135,31 @@ export const startPreviewSyncRuntime = () => {
     lastPublishedSentenceId = null;
     lastPublishedStageState = null;
     setEffectBaselines.clear();
+    activeSyncSceneRevision = null;
+    WebGAL.gameplay.isFastPreview = false;
     targetTransformBaselines.invalidateCurrentRevision();
+  };
+
+  const startSyncSceneTransaction = () => {
+    nextSyncSceneRevision += 1;
+    activeSyncSceneRevision = nextSyncSceneRevision;
+    return activeSyncSceneRevision;
+  };
+
+  const isActiveSyncSceneRevision = (revision: number) => activeSyncSceneRevision === revision;
+
+  const finishSyncSceneTransaction = (revision: number) => {
+    if (!isActiveSyncSceneRevision(revision)) {
+      return false;
+    }
+
+    activeSyncSceneRevision = null;
+    return true;
+  };
+
+  const cancelActiveSyncScene = () => {
+    activeSyncSceneRevision = null;
+    WebGAL.gameplay.isFastPreview = false;
   };
 
   const buildStageStateSnapshot = (stageState: StageStateSnapshot): StageSnapshotUpdatedPayload['stageState'] => {
@@ -150,6 +176,9 @@ export const startPreviewSyncRuntime = () => {
 
   const publishStageSnapshot = (force: boolean, stageState = stageStateManager.getCalculationStageState()) => {
     if (!registered) {
+      return;
+    }
+    if (activeSyncSceneRevision !== null) {
       return;
     }
 
@@ -176,6 +205,10 @@ export const startPreviewSyncRuntime = () => {
       lastPublishedSentenceId = sentenceId;
       lastPublishedStageState = stageState;
     }
+  };
+
+  const publishSettledStageSnapshot = () => {
+    publishStageSnapshot(true, stageStateManager.getViewStageState());
   };
 
   const registerPreview = async (socket: PreviewSyncTransportSocket) => {
@@ -222,6 +255,8 @@ export const startPreviewSyncRuntime = () => {
   };
 
   const handleSyncScene = (payload: SyncScenePayload) => {
+    const syncSceneRevision = startSyncSceneTransaction();
+    const isLatestSyncScene = () => isActiveSyncSceneRevision(syncSceneRevision);
     setEffectBaselines.clear();
     const { transformBaselineRevision } = payload;
     if (transformBaselineRevision) {
@@ -232,7 +267,11 @@ export const startPreviewSyncRuntime = () => {
 
     executePreviewSyncSceneCommand(payload, {
       onFastPreviewTimeout: emitFastPreviewTimeout,
+      isLatest: isLatestSyncScene,
       onBeforeTargetScriptExecute: () => {
+        if (!isLatestSyncScene()) {
+          return;
+        }
         if (!transformBaselineRevision) {
           return;
         }
@@ -243,22 +282,37 @@ export const startPreviewSyncRuntime = () => {
         );
       },
       onSettled: (result) => {
+        if (!finishSyncSceneTransaction(syncSceneRevision)) {
+          return;
+        }
+
+        if (result === null) {
+          if (transformBaselineRevision) {
+            targetTransformBaselines.failRevision(transformBaselineRevision);
+          }
+          return;
+        }
+
         if (!transformBaselineRevision) {
+          publishSettledStageSnapshot();
           return;
         }
 
         const isSyncSettled = isTargetTransformBaselineSyncSettled(result, payload);
         if (!isSyncSettled || !targetTransformBaselines.publishCapturedSnapshot(transformBaselineRevision)) {
           targetTransformBaselines.failRevision(transformBaselineRevision);
+          publishSettledStageSnapshot();
           return;
         }
 
         setEffectBaselines.clear();
+        publishSettledStageSnapshot();
       },
     });
   };
 
   const handleRunSnippet = (payload: RunSnippetPayload) => {
+    cancelActiveSyncScene();
     setEffectBaselines.clear();
     targetTransformBaselines.invalidateCurrentRevision();
     applyPreviewDebugVariables(payload.debugVariables);
@@ -293,6 +347,7 @@ export const startPreviewSyncRuntime = () => {
   };
 
   const handleRunSceneContent = (payload: RunSceneContentPayload) => {
+    cancelActiveSyncScene();
     setEffectBaselines.clear();
     targetTransformBaselines.invalidateCurrentRevision();
     resetStage(true);

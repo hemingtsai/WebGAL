@@ -29,16 +29,19 @@ export interface PreviewSyncSceneCommandCallbacks {
   onFastPreviewTimeout?: FastPreviewTimeoutEmitter;
   onBeforeTargetScriptExecute?: () => void;
   onSettled?: (result: FastPreviewResult | null) => void;
+  isLatest?: () => boolean;
 }
 
 interface RunFastPreviewOptions {
   onBeforeTargetScriptExecute?: () => void;
+  isLatest?: () => boolean;
 }
 
 export function executePreviewSyncSceneCommand(
   { sceneName, sentenceId, debugVariables, settleMode = 'normal' }: SyncScenePayload,
   callbacks: PreviewSyncSceneCommandCallbacks = {},
 ): void {
+  const isLatest = () => callbacks.isLatest?.() ?? true;
   logger.warn('正在跳转到' + sceneName + ':' + sentenceId);
   WebGAL.gameplay.isFastPreview = false;
 
@@ -57,22 +60,39 @@ export function executePreviewSyncSceneCommand(
 
   sceneFetcher(sceneUrl)
     .then((rawScene) => {
-      resetStage(true);
+      if (!isLatest()) {
+        return;
+      }
+
+      resetStage(true, true, { commitStageState: false });
       applyPreviewDebugVariables(debugVariables);
       WebGAL.sceneManager.sceneData.currentScene = sceneParser(rawScene, sceneName, sceneUrl);
       const currentSceneName = WebGAL.sceneManager.sceneData.currentScene.sceneName;
       void runFastPreview(sentenceId, currentSceneName, callbacks.onFastPreviewTimeout, settleMode, {
         onBeforeTargetScriptExecute: callbacks.onBeforeTargetScriptExecute,
+        isLatest: callbacks.isLatest,
       })
         .then((result) => {
+          if (!isLatest()) {
+            return;
+          }
+
           callbacks.onSettled?.(result);
         })
         .catch((error) => {
+          if (!isLatest()) {
+            return;
+          }
+
           logger.error('实时预览跳转错误', error);
           callbacks.onSettled?.(null);
         });
     })
     .catch((error) => {
+      if (!isLatest()) {
+        return;
+      }
+
       stopFast();
       WebGAL.gameplay.isFastPreview = false;
       logger.error('实时预览跳转错误', error);
@@ -86,7 +106,8 @@ export async function runFastPreview(
   onFastPreviewTimeout?: FastPreviewTimeoutEmitter,
   settleMode: SyncSceneSettleMode = 'normal',
   options: RunFastPreviewOptions = {},
-): Promise<FastPreviewResult> {
+): Promise<FastPreviewResult | null> {
+  const isLatest = () => options.isLatest?.() ?? true;
   const fastPreviewStartTime = performance.now();
   const baseSceneStackDepth = WebGAL.sceneManager.sceneData.sceneStack.length;
   stopFast();
@@ -117,6 +138,10 @@ export async function runFastPreview(
 
   try {
     while (shouldContinueFastPreview(sentenceId, currentSceneName, baseSceneStackDepth)) {
+      if (!isLatest()) {
+        return null;
+      }
+
       const prevSentenceId = WebGAL.sceneManager.sceneData.currentSentenceId;
       const prevSceneName = WebGAL.sceneManager.sceneData.currentScene.sceneName;
       const isForwarded = forward({
@@ -134,6 +159,9 @@ export async function runFastPreview(
       const awaitedSceneWrite = await waitForPendingSceneWrite();
       if (awaitedSceneWrite) {
         suspendedElapsedMs += performance.now() - sceneWriteWaitStart;
+      }
+      if (!isLatest()) {
+        return null;
       }
 
       if (!isForwarded && !awaitedSceneWrite) {
@@ -164,12 +192,18 @@ export async function runFastPreview(
       }
     }
   } finally {
-    WebGAL.gameplay.isFastPreview = false;
+    if (isLatest()) {
+      WebGAL.gameplay.isFastPreview = false;
+    }
   }
 
   if (settleMode === 'immediate') {
     WebGAL.gameplay.performController.discardUncommittedNonHoldPerforms(true);
     WebGAL.gameplay.performController.clearNonHoldPerformsFromStageState();
+  }
+
+  if (!isLatest()) {
+    return null;
   }
 
   commitForward();
