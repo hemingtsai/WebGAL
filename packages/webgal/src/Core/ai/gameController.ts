@@ -29,6 +29,7 @@ import { logger } from '@/Core/util/logger';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import { webgalStore } from '@/store/store';
 import { setVisibility } from '@/store/GUIReducer';
+import { showAIChoices, hideAIChoices } from '@/UI/AISetup/AIChoiceUI';
 
 /** Provider initialization config */
 export interface ProviderInitConfig {
@@ -181,6 +182,9 @@ export class AIGameController {
     if (!this.engine) throw new Error('Game not initialized');
     if (this.state !== AIGameState.CHOOSING) throw new Error('No choice pending');
 
+    // Hide choice UI
+    hideAIChoices();
+
     this.setState(AIGameState.GENERATING);
     this.showThinking();
 
@@ -242,13 +246,13 @@ export class AIGameController {
    * After streaming completes, finalize the text and show choices if any.
    */
   private async finalizeStreamedText(output: StoryGenerationOutput): Promise<void> {
-    // Clear streaming buffer
     this.streamingBuffer = '';
 
-    // If there's a choice point, store it for later display
     if (output.choicePoint) {
       this.pendingChoice = { choicePoint: output.choicePoint, output };
       this.setState(AIGameState.CHOOSING);
+      // Show choice UI
+      showAIChoices(output.choicePoint);
     } else {
       this.setState(AIGameState.PLAYING);
     }
@@ -342,6 +346,7 @@ export class AIGameController {
     if (output.choicePoint) {
       this.pendingChoice = { choicePoint: output.choicePoint, output };
       this.setState(AIGameState.CHOOSING);
+      showAIChoices(output.choicePoint);
     } else {
       this.setState(AIGameState.PLAYING);
     }

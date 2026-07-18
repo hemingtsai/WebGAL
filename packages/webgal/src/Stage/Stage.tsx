@@ -16,6 +16,8 @@ import { WebGAL } from '@/Core/WebGAL';
 import { IGuiState } from '@/store/guiInterface';
 import { IStageState } from '@/Core/Modules/stage/stageInterface';
 import { useStageState } from '@/hooks/useStageState';
+import { continueAIStory } from '@/Core/ai/aiInitialize';
+import { AIGameState } from '@/Core/ai/gameController';
 // import OldStage from '@/Components/Stage/OldStage/OldStage';
 
 let timeoutEventHandle: ReturnType<typeof setTimeout> | null = null;
@@ -92,11 +94,21 @@ export const Stage: FC = () => {
       <AudioContainer />
       <div
         onClick={() => {
-          // 如果文本框没有显示，则显示文本框
+          // If text box is hidden, show it
           if (!GUIState.showTextBox) {
             dispatch(setVisibility({ component: 'showTextBox', visibility: true }));
             return;
           }
+          // AI mode: continue AI story instead of normal script
+          const aiController = WebGAL.aiController;
+          if (aiController?.isReady()) {
+            const state = aiController.getState();
+            if (state !== AIGameState.GENERATING && state !== AIGameState.CHOOSING) {
+              continueAIStory();
+            }
+            return;
+          }
+          // Normal mode
           stopAll();
           nextSentence();
         }}
