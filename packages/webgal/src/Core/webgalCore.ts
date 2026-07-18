@@ -10,6 +10,7 @@ import { WebgalTemplate } from '@/types/template';
 import { IWebGALStyleObj } from 'webgal-parser/build/types/styleParser';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import { FlowchartManager } from '@/Core/Modules/flowchart';
+import { AIGameController, getAIGameController } from '@/Core/ai/gameController';
 
 export class WebgalCore {
   public sceneManager = new SceneManager();
@@ -25,4 +26,6 @@ export class WebgalCore {
   public steam = new SteamIntegration();
   public template: WebgalTemplate | null = null;
   public styleObjects: Map<string, IWebGALStyleObj> = new Map();
+  /** AI Game Controller for dynamic story generation */
+  public aiController: AIGameController = getAIGameController();
 }

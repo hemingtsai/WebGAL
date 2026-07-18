@@ -1,8 +1,8 @@
-Game_name:欢迎使用WebGAL！;
-Game_key:0f87dstRg;
-Title_img:WebGAL_New_Enter_Image.webp;
-Title_bgm:s_Title.mp3;
-Game_Logo:WebGalEnter.webp;
-Enable_Appreciation:true;
+Game_name:AI-Powered Visual Novel;
+Game_key:ai_vn_001;
+Title_img:;
+Title_bgm:;
+Game_Logo:;
+Enable_Appreciation:false;
 Enable_Continue:true;
-Enable_flowchart:true;
+Enable_flowchart:false;
