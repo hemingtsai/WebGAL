@@ -16,6 +16,7 @@ import { getConfigManager } from '@/Core/userConfig/configManager';
 import { setProviderApiKey, getConfiguredProviders } from '@/Core/ai/aiInitialize';
 import { initializeAIGame } from '@/Core/ai/aiInitialize';
 import { WebGAL } from '@/Core/WebGAL';
+import { STORY_TEMPLATES, applyTemplate } from '@/Core/userConfig/templates';
 import type {
   WorldSetting,
   Character,
@@ -289,7 +290,22 @@ export function AISetup() {
         </div>
 
         {/* Step content */}
-        {step === 'api' && <APIStep apiKeys={apiKeys} setApiKeys={setApiKeys} />}
+        {step === 'api' && (
+          <>
+            <APIStep apiKeys={apiKeys} setApiKeys={setApiKeys} />
+            <TemplateSelector
+              onSelect={(config) => {
+                setWorld(config.worldSetting);
+                setCharacters(config.characters);
+                setScenes(config.scenes);
+                setStoryBeginning(config.storyBeginning);
+                setLanguage(config.language);
+                // Jump to story step to review and start
+                setStep('story');
+              }}
+            />
+          </>
+        )}
         {step === 'world' && <WorldStep world={world} setWorld={setWorld} />}
         {step === 'characters' && <CharactersStep characters={characters} setCharacters={setCharacters} />}
         {step === 'scenes' && <ScenesStep scenes={scenes} setScenes={setScenes} />}
@@ -698,6 +714,62 @@ function StoryStep({
       <p style={{ color: '#999', fontSize: '12px' }}>
         提示：故事开头越详细，AI生成的剧情就越贴合你的期望。建议包含初始场景、出场的角色、以及故事的起点事件。
       </p>
+    </div>
+  );
+}
+
+function TemplateSelector({ onSelect }: { onSelect: (config: import('@/Core/ai/types').StoryConfig) => void }) {
+  return (
+    <div style={styles.section}>
+      <h2 style={styles.sectionTitle}>🚀 快速开始（可选）</h2>
+      <p style={{ color: '#999', fontSize: '13px', marginBottom: '12px' }}>
+        选择一个预设模板快速开始，也可以跳过手动设定。
+      </p>
+      <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+        {STORY_TEMPLATES.map((t) => (
+          <div
+            key={t.id}
+            onClick={() => onSelect(t.config)}
+            style={{
+              flex: '1 1 280px',
+              maxWidth: '400px',
+              background: 'rgba(255,255,255,0.06)',
+              borderRadius: '12px',
+              padding: '16px',
+              cursor: 'pointer',
+              border: '1px solid rgba(255,255,255,0.1)',
+              transition: 'all 0.2s',
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.background = 'rgba(196, 77, 255, 0.15)';
+              e.currentTarget.style.borderColor = 'rgba(196, 77, 255, 0.4)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.background = 'rgba(255,255,255,0.06)';
+              e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+            }}
+          >
+            <div style={{ fontSize: '16px', fontWeight: 'bold', marginBottom: '6px' }}>{t.name}</div>
+            <div style={{ fontSize: '12px', color: '#aaa', marginBottom: '8px' }}>{t.description}</div>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              {t.tags.map((tag) => (
+                <span
+                  key={tag}
+                  style={{
+                    fontSize: '11px',
+                    padding: '2px 8px',
+                    borderRadius: '10px',
+                    background: 'rgba(255,107,157,0.2)',
+                    color: '#ff8fb3',
+                  }}
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
