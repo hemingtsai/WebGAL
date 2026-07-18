@@ -70,6 +70,8 @@ export interface ISaveData {
   saveTime: string; // 保存时间
   sceneData: ISaveScene; // 场景数据
   previewImage: string;
+  /** AI story engine state (serialized), for AI-powered games */
+  aiState?: Record<string, unknown> | null;
 }
 
 export interface IAppreciationAsset {

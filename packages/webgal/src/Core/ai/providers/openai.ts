@@ -2,11 +2,13 @@
  * OpenAI AI Provider
  *
  * Implements the IAIProvider interface for OpenAI's API.
+ * Full streaming support via SSE.
  * Base URL: https://api.openai.com/v1
  */
 
 import { AIModel } from '../types';
-import { ChatCompletionOptions, ChatCompletionResponse, IAIProvider } from './base';
+import { ChatCompletionOptions, ChatCompletionResponse, IAIProvider, StreamCallback } from './base';
+import { fetchChatCompletion, parseJSONResponse, parseSSEStream } from './streamUtils';
 
 const OPENAI_MODELS: AIModel[] = [
   {
@@ -49,53 +51,22 @@ export class OpenAIProvider implements IAIProvider {
   }
 
   async chatCompletion(options: ChatCompletionOptions): Promise<ChatCompletionResponse> {
-    const url = `${this.baseURL}/chat/completions`;
+    const response = await fetchChatCompletion(this.baseURL, this.apiKey, options, false);
+    return parseJSONResponse(response, options.model);
+  }
 
-    const body = {
-      model: options.model,
-      messages: options.messages,
-      temperature: options.temperature ?? 0.7,
-      max_tokens: options.maxTokens ?? 4096,
-      stream: false,
-    };
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify(body),
-      signal: options.signal,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`OpenAI API error (${response.status}): ${errorText}`);
-    }
-
-    const data = await response.json();
-
-    return {
-      content: data.choices?.[0]?.message?.content || '',
-      model: data.model || options.model,
-      usage: data.usage
-        ? {
-            promptTokens: data.usage.prompt_tokens || 0,
-            completionTokens: data.usage.completion_tokens || 0,
-            totalTokens: data.usage.total_tokens || 0,
-          }
-        : undefined,
-      finishReason: data.choices?.[0]?.finish_reason,
-    };
+  async streamChatCompletion(
+    options: ChatCompletionOptions,
+    onChunk: StreamCallback,
+  ): Promise<ChatCompletionResponse> {
+    const response = await fetchChatCompletion(this.baseURL, this.apiKey, options, true);
+    return parseSSEStream(response, options.model, onChunk);
   }
 
   async healthCheck(): Promise<boolean> {
     try {
       const response = await fetch(`${this.baseURL}/models`, {
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-        },
+        headers: { Authorization: `Bearer ${this.apiKey}` },
       });
       return response.ok;
     } catch {

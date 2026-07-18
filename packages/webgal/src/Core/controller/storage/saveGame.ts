@@ -56,6 +56,8 @@ export function generateCurrentStageData(index: number, isSavePreviewImage = tru
       sceneUrl: WebGAL.sceneManager.sceneData.currentScene.sceneUrl, // 场景url
     },
     previewImage: urlToSave,
+    // AI state serialization
+    aiState: WebGAL.aiController?.serializeState() || null,
   };
   return saveData;
 }

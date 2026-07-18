@@ -24,6 +24,7 @@ import {
 } from './promptBuilder';
 import { IAIProvider } from './providers/base';
 import { v4 as uuidv4 } from 'uuid';
+import { getMemoryManager, ContextMemoryManager } from './memoryManager';
 
 /** Default story state */
 function createInitialState(config: StoryConfig): StoryState {
@@ -46,10 +47,12 @@ export class AIStoryEngine {
   private scheduler: AIScheduler;
   private isGenerating = false;
   private currentChoicePoint: ChoicePoint | null = null;
+  private memoryManager: ContextMemoryManager;
 
   constructor(config: StoryConfig, scheduler?: AIScheduler) {
     this.state = createInitialState(config);
     this.scheduler = scheduler || getScheduler();
+    this.memoryManager = getMemoryManager();
   }
 
   // ============================================================
@@ -88,6 +91,31 @@ export class AIStoryEngine {
     this.isGenerating = true;
     try {
       const output = await this.doGenerateStory();
+      this.applyGenerationOutput(output);
+      return output;
+    } finally {
+      this.isGenerating = false;
+    }
+  }
+
+  /**
+   * Generate the next story segment with streaming.
+   * Calls onTextChunk for each text delta as it arrives from AI.
+   */
+  async generateNextSegmentStreaming(
+    onTextChunk: (text: string) => void,
+  ): Promise<StoryGenerationOutput> {
+    if (this.isGenerating) {
+      throw new Error('Story generation already in progress');
+    }
+
+    if (this.currentChoicePoint) {
+      throw new Error('A choice point is pending — user must select a choice first');
+    }
+
+    this.isGenerating = true;
+    try {
+      const output = await this.doGenerateStoryStreaming(onTextChunk);
       this.applyGenerationOutput(output);
       return output;
     } finally {
@@ -242,6 +270,9 @@ export class AIStoryEngine {
   // ============================================================
 
   private async doGenerateStory(): Promise<StoryGenerationOutput> {
+    // Manage memory before generating (summarize old events if needed)
+    await this.memoryManager.manageContext(this.state);
+
     const messages = buildStoryGenerationPrompt(this.state.config, this.state);
 
     const taskId = uuidv4();
@@ -256,6 +287,36 @@ export class AIStoryEngine {
     };
 
     const result = await this.scheduler.executeTask(taskRequest);
+    if (!result.success) {
+      throw new Error(`Story generation failed: ${result.error}`);
+    }
+
+    return this.parseGenerationResponse(result);
+  }
+
+  private async doGenerateStoryStreaming(
+    onTextChunk: (text: string) => void,
+  ): Promise<StoryGenerationOutput> {
+    // Manage memory before generating
+    await this.memoryManager.manageContext(this.state);
+
+    const messages = buildStoryGenerationPrompt(this.state.config, this.state);
+
+    const taskId = uuidv4();
+    const taskRequest: TaskRequest = {
+      id: taskId,
+      taskType: 'generate_story',
+      messages,
+      options: {
+        temperature: 0.8,
+        maxTokens: 4096,
+      },
+    };
+
+    const result = await this.scheduler.executeTaskStreaming(
+      taskRequest,
+      onTextChunk,
+    );
     if (!result.success) {
       throw new Error(`Story generation failed: ${result.error}`);
     }

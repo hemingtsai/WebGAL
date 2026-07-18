@@ -2,19 +2,20 @@
  * DeepSeek AI Provider
  *
  * Implements the IAIProvider interface for DeepSeek's API.
- * DeepSeek uses an OpenAI-compatible API format.
+ * Uses OpenAI-compatible API format with full streaming support.
  * Base URL: https://api.deepseek.com/v1
  */
 
 import { AIModel } from '../types';
-import { ChatCompletionOptions, ChatCompletionResponse, IAIProvider } from './base';
+import { ChatCompletionOptions, ChatCompletionResponse, IAIProvider, StreamCallback } from './base';
+import { fetchChatCompletion, parseJSONResponse, parseSSEStream } from './streamUtils';
 
 const DEEPSEEK_MODELS: AIModel[] = [
   {
     id: 'deepseek-chat',
     name: 'DeepSeek V3',
     provider: 'deepseek',
-    capabilities: ['story_generation', 'choice_generation', 'scheduling', 'translation'],
+    capabilities: ['story_generation', 'choice_generation', 'scheduling', 'translation', 'image_selection'],
     maxTokens: 65536,
     defaultTemperature: 0.7,
   },
@@ -42,53 +43,22 @@ export class DeepSeekProvider implements IAIProvider {
   }
 
   async chatCompletion(options: ChatCompletionOptions): Promise<ChatCompletionResponse> {
-    const url = `${this.baseURL}/chat/completions`;
+    const response = await fetchChatCompletion(this.baseURL, this.apiKey, options, false);
+    return parseJSONResponse(response, options.model);
+  }
 
-    const body = {
-      model: options.model,
-      messages: options.messages,
-      temperature: options.temperature ?? 0.7,
-      max_tokens: options.maxTokens ?? 4096,
-      stream: false,
-    };
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify(body),
-      signal: options.signal,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`DeepSeek API error (${response.status}): ${errorText}`);
-    }
-
-    const data = await response.json();
-
-    return {
-      content: data.choices?.[0]?.message?.content || '',
-      model: data.model || options.model,
-      usage: data.usage
-        ? {
-            promptTokens: data.usage.prompt_tokens || 0,
-            completionTokens: data.usage.completion_tokens || 0,
-            totalTokens: data.usage.total_tokens || 0,
-          }
-        : undefined,
-      finishReason: data.choices?.[0]?.finish_reason,
-    };
+  async streamChatCompletion(
+    options: ChatCompletionOptions,
+    onChunk: StreamCallback,
+  ): Promise<ChatCompletionResponse> {
+    const response = await fetchChatCompletion(this.baseURL, this.apiKey, options, true);
+    return parseSSEStream(response, options.model, onChunk);
   }
 
   async healthCheck(): Promise<boolean> {
     try {
       const response = await fetch(`${this.baseURL}/models`, {
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-        },
+        headers: { Authorization: `Bearer ${this.apiKey}` },
       });
       return response.ok;
     } catch {

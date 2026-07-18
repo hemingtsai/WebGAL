@@ -16,6 +16,7 @@ import {
   CharacterImage,
   SceneImage,
 } from './types';
+import { getMemoryManager } from './memoryManager';
 
 /**
  * Build the system prompt for story generation
@@ -26,6 +27,7 @@ export function buildStoryGenerationPrompt(config: StoryConfig, state: StoryStat
   const scenePrompt = buildScenePrompts(config.scenes, state.currentSceneId);
   const historyPrompt = buildHistoryPrompt(state);
   const outputFormat = buildOutputFormatPrompt();
+  const memorySummary = getMemoryManager().getSummaryContext();
 
   const systemMessage: ChatMessage = {
     role: 'system',
@@ -39,6 +41,8 @@ ${characterPrompt}
 
 ## 场景列表
 ${scenePrompt}
+
+${memorySummary}
 
 ## 输出格式要求
 ${outputFormat}

@@ -2,16 +2,13 @@
  * AI Game Controller
  *
  * Integrates AI-powered story generation with WebGAL's existing game engine.
- * Replaces the hardcoded script-based story flow with dynamic AI generation.
+ * Supports both batch and streaming generation.
  *
- * Flow:
- * 1. User sets up world, characters, scenes, and story beginning
- * 2. AI generates the first story segment
- * 3. Story segment is converted to WebGAL script format
- * 4. WebGAL engine executes the script
- * 5. When a choice point is reached, AI generates options
- * 6. User selects a choice → AI generates next segment
- * 7. Images are selected by a small model based on generated text
+ * Streaming flow:
+ * 1. AI generates text via SSE streaming
+ * 2. Text chunks are fed to WebGAL's stage state in real-time
+ * 3. WebGAL's existing text animation handles the typewriter effect
+ * 4. When complete, the full response is parsed into WebGAL script
  */
 
 import { AIStoryEngine, createStoryEngine } from './storyEngine';
@@ -24,11 +21,14 @@ import {
   StoryGenerationOutput,
   ChoicePoint,
   ImageSelectionOutput,
-  AIModel,
+  TaskRequest,
 } from './types';
 import { IAIProvider } from './providers/base';
 import { WebGAL } from '@/Core/WebGAL';
 import { logger } from '@/Core/util/logger';
+import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
+import { webgalStore } from '@/store/store';
+import { setVisibility } from '@/store/GUIReducer';
 
 /** Provider initialization config */
 export interface ProviderInitConfig {
@@ -40,12 +40,18 @@ export interface ProviderInitConfig {
 /** AI Game Controller state */
 export enum AIGameState {
   UNINITIALIZED = 'uninitialized',
-  CONFIGURING = 'configuring',   // User is setting up the story
-  READY = 'ready',               // Config is set, ready to generate
-  GENERATING = 'generating',     // AI is generating story
-  PLAYING = 'playing',           // Executing generated script
-  CHOOSING = 'choosing',         // Waiting for user choice
+  CONFIGURING = 'configuring',
+  READY = 'ready',
+  GENERATING = 'generating',
+  PLAYING = 'playing',
+  CHOOSING = 'choosing',
   ERROR = 'error',
+}
+
+/** Pending choice that will be shown after current text finishes */
+interface PendingChoice {
+  choicePoint: ChoicePoint;
+  output: StoryGenerationOutput;
 }
 
 export class AIGameController {
@@ -54,14 +60,14 @@ export class AIGameController {
   private generationCallbacks: Array<(output: StoryGenerationOutput) => void> = [];
   private imageCallbacks: Array<(output: ImageSelectionOutput) => void> = [];
   private errorCallbacks: Array<(error: Error) => void> = [];
+  private pendingChoice: PendingChoice | null = null;
+  private streamingBuffer = '';
+  private abortController: AbortController | null = null;
 
   // ============================================================
   // Initialization
   // ============================================================
 
-  /**
-   * Initialize AI providers with API keys
-   */
   initializeProviders(providers: ProviderInitConfig[]): void {
     const scheduler = getScheduler();
 
@@ -76,7 +82,6 @@ export class AIGameController {
           provider = new OpenAIProvider(config.apiKey, config.baseURL);
           break;
         default:
-          // For custom providers, try DeepSeek-compatible API
           provider = new DeepSeekProvider(
             config.apiKey,
             config.baseURL || `https://api.${config.provider}.com/v1`,
@@ -91,59 +96,51 @@ export class AIGameController {
     }
   }
 
-  /**
-   * Initialize the AI game controller with story config
-   */
   async initializeGame(): Promise<void> {
     const configManager = getConfigManager();
     const config = configManager.getConfig();
 
     if (!configManager.isReady()) {
-      throw new Error('Story configuration is not complete. Please set up world, characters, scenes, and story beginning.');
+      throw new Error('Story configuration is not complete.');
     }
 
     const scheduler = getScheduler();
     this.engine = new AIStoryEngine(config, scheduler);
     this.state = AIGameState.READY;
 
-    logger.info('[AI] Game initialized with config:', {
+    logger.info('[AI] Game initialized:', {
       worldName: config.worldSetting.name,
       characters: config.characters.length,
       scenes: config.scenes.length,
     });
   }
 
-  /**
-   * Check if game is ready to start
-   */
   isReady(): boolean {
-    return this.state === AIGameState.READY;
+    return this.state === AIGameState.READY || this.state === AIGameState.PLAYING || this.state === AIGameState.CHOOSING;
   }
 
-  /**
-   * Get current game state
-   */
   getState(): AIGameState {
     return this.state;
   }
 
   // ============================================================
-  // Story Generation
+  // Streaming Story Generation (main API)
   // ============================================================
 
   /**
-   * Generate the first story segment (called after initialization)
+   * Generate the first story segment with streaming text display.
+   * Text appears in WebGAL's text box as it's generated.
    */
-  async startStory(): Promise<StoryGenerationOutput | null> {
-    if (!this.engine) {
-      this.setState(AIGameState.ERROR);
-      throw new Error('Game not initialized');
-    }
+  async startStoryStreaming(): Promise<StoryGenerationOutput | null> {
+    if (!this.engine) throw new Error('Game not initialized');
 
     this.setState(AIGameState.GENERATING);
+    this.showThinking();
+
     try {
       const output = await this.engine.initialize();
-      this.handleGenerationComplete(output);
+      // For initialization, we use batch mode then display
+      await this.displayStoryOutput(output);
       return output;
     } catch (error: any) {
       this.handleError(error);
@@ -152,17 +149,154 @@ export class AIGameController {
   }
 
   /**
-   * Continue story to next segment
+   * Continue story with streaming text display.
+   * AI text streams into WebGAL's text box in real-time.
    */
+  async continueStoryStreaming(): Promise<StoryGenerationOutput | null> {
+    if (!this.engine) throw new Error('Game not initialized');
+    if (this.state === AIGameState.CHOOSING) throw new Error('Choice pending');
+
+    this.setState(AIGameState.GENERATING);
+    this.showThinking();
+
+    try {
+      // Use streaming generation
+      const output = await this.engine.generateNextSegmentStreaming(
+        (chunk: string) => {
+          this.streamTextToStage(chunk);
+        },
+      );
+      await this.finalizeStreamedText(output);
+      return output;
+    } catch (error: any) {
+      this.handleError(error);
+      return null;
+    }
+  }
+
+  /**
+   * User selects a choice, then continues with streaming.
+   */
+  async selectChoiceStreaming(optionIndex: number): Promise<StoryGenerationOutput | null> {
+    if (!this.engine) throw new Error('Game not initialized');
+    if (this.state !== AIGameState.CHOOSING) throw new Error('No choice pending');
+
+    this.setState(AIGameState.GENERATING);
+    this.showThinking();
+
+    try {
+      // Record choice then generate
+      const output = await this.engine.selectChoice(optionIndex);
+      // Generate next with streaming
+      const nextOutput = await this.engine.generateNextSegmentStreaming(
+        (chunk: string) => {
+          this.streamTextToStage(chunk);
+        },
+      );
+      await this.finalizeStreamedText(nextOutput);
+      return nextOutput;
+    } catch (error: any) {
+      this.handleError(error);
+      return null;
+    }
+  }
+
+  getChoicePoint(): ChoicePoint | null {
+    return this.pendingChoice?.choicePoint || this.engine?.getCurrentChoicePoint() || null;
+  }
+
+  // ============================================================
+  // Text Streaming to WebGAL Stage
+  // ============================================================
+
+  /**
+   * Show "AI thinking" indicator in the text box
+   */
+  private showThinking(): void {
+    this.streamingBuffer = '';
+    stageStateManager.setStage('showText', '⏳ AI 正在生成剧情...');
+    stageStateManager.setStage('showName', '系统');
+    stageStateManager.setStage('isDisableTextbox', false);
+    stageStateManager.commit({ notifyReact: true });
+    webgalStore.dispatch(setVisibility({ component: 'showTextBox', visibility: true }));
+  }
+
+  /**
+   * Stream raw AI text to WebGAL's stage in real-time.
+   * This creates a typewriter-like effect as AI generates.
+   */
+  private streamTextToStage(chunk: string): void {
+    this.streamingBuffer += chunk;
+
+    // Try to extract speaker and text for better display
+    const parsed = this.tryParseStreamingText(this.streamingBuffer);
+
+    stageStateManager.setStage('showText', parsed.text);
+    if (parsed.speaker) {
+      stageStateManager.setStage('showName', parsed.speaker);
+    }
+    stageStateManager.commit({ notifyReact: true });
+  }
+
+  /**
+   * After streaming completes, finalize the text and show choices if any.
+   */
+  private async finalizeStreamedText(output: StoryGenerationOutput): Promise<void> {
+    // Clear streaming buffer
+    this.streamingBuffer = '';
+
+    // If there's a choice point, store it for later display
+    if (output.choicePoint) {
+      this.pendingChoice = { choicePoint: output.choicePoint, output };
+      this.setState(AIGameState.CHOOSING);
+    } else {
+      this.setState(AIGameState.PLAYING);
+    }
+
+    this.generationCallbacks.forEach((cb) => cb(output));
+
+    // Select images based on generated text
+    const contentText = output.script || output.summary;
+    if (contentText && this.engine) {
+      this.engine.selectImages(contentText).then((imageSelection) => {
+        if (imageSelection) {
+          this.imageCallbacks.forEach((cb) => cb(imageSelection));
+        }
+      });
+    }
+  }
+
+  /**
+   * Try to parse streaming text to extract speaker and content.
+   * Handles WebGAL script format like: "Character：dialog -speaker=Character"
+   */
+  private tryParseStreamingText(raw: string): { speaker: string; text: string } {
+    // Try to match WebGAL dialogue format
+    const dialogueMatch = raw.match(/^(.+?)[：:]\s*(.+?)(?:\s+-speaker=.*)?$/s);
+    if (dialogueMatch) {
+      return { speaker: dialogueMatch[1].trim(), text: dialogueMatch[2].trim() };
+    }
+
+    // Try plain text with speaker name
+    const speakerMatch = raw.match(/^(.+?)[：:]\s*(.+)$/s);
+    if (speakerMatch) {
+      return { speaker: speakerMatch[1].trim(), text: speakerMatch[2].trim() };
+    }
+
+    // Fallback: just raw text
+    return { speaker: '', text: raw };
+  }
+
+  // ============================================================
+  // Legacy Batch API (for compatibility)
+  // ============================================================
+
+  async startStory(): Promise<StoryGenerationOutput | null> {
+    return this.startStoryStreaming();
+  }
+
   async continueStory(): Promise<StoryGenerationOutput | null> {
-    if (!this.engine) {
-      throw new Error('Game not initialized');
-    }
-
-    if (this.state === AIGameState.CHOOSING) {
-      throw new Error('A choice is pending — user must select first');
-    }
-
+    if (!this.engine) throw new Error('Game not initialized');
     this.setState(AIGameState.GENERATING);
     try {
       const output = await this.engine.generateNextSegment();
@@ -174,18 +308,8 @@ export class AIGameController {
     }
   }
 
-  /**
-   * User selects a choice option
-   */
   async selectChoice(optionIndex: number): Promise<StoryGenerationOutput | null> {
-    if (!this.engine) {
-      throw new Error('Game not initialized');
-    }
-
-    if (this.state !== AIGameState.CHOOSING) {
-      throw new Error('No choice is pending');
-    }
-
+    if (!this.engine) throw new Error('Game not initialized');
     this.setState(AIGameState.GENERATING);
     try {
       const output = await this.engine.selectChoice(optionIndex);
@@ -198,31 +322,72 @@ export class AIGameController {
   }
 
   /**
-   * Get current choice point (if any)
+   * For batch mode: display generated output as WebGAL script
    */
-  getChoicePoint(): ChoicePoint | null {
-    return this.engine?.getCurrentChoicePoint() || null;
+  async displayStoryOutput(output: StoryGenerationOutput): Promise<void> {
+    if (output.script) {
+      const lines = output.script.split('\n').filter((l) => l.trim());
+      for (const line of lines) {
+        const parsed = this.tryParseStreamingText(line);
+        stageStateManager.setStage('showText', parsed.text);
+        stageStateManager.setStage('showName', parsed.speaker);
+        stageStateManager.setStage('isDisableTextbox', false);
+        stageStateManager.commit({ notifyReact: true });
+        webgalStore.dispatch(setVisibility({ component: 'showTextBox', visibility: true }));
+        // Small delay between lines for readability
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    }
+
+    if (output.choicePoint) {
+      this.pendingChoice = { choicePoint: output.choicePoint, output };
+      this.setState(AIGameState.CHOOSING);
+    } else {
+      this.setState(AIGameState.PLAYING);
+    }
+    this.generationCallbacks.forEach((cb) => cb(output));
   }
 
   // ============================================================
-  // Image Selection
+  // Save / Load AI Context
   // ============================================================
 
   /**
-   * Select images based on generated story text
+   * Serialize AI engine state for saving.
+   * Returns a JSON-serializable object containing the full story state.
    */
-  async selectImages(latestText: string): Promise<ImageSelectionOutput | null> {
+  serializeState(): Record<string, unknown> | null {
     if (!this.engine) return null;
+    const state = this.engine.getState();
+    return {
+      history: state.history,
+      currentSceneId: state.currentSceneId,
+      currentCharacterIds: state.currentCharacterIds,
+      variables: state.variables,
+      mood: state.mood,
+      hasPendingChoice: !!this.pendingChoice,
+      pendingChoice: this.pendingChoice?.choicePoint || null,
+    };
+  }
 
-    try {
-      const output = await this.engine.selectImages(latestText);
-      if (output) {
-        this.imageCallbacks.forEach((cb) => cb(output));
-      }
-      return output;
-    } catch (error) {
-      console.warn('[AI] Image selection failed:', error);
-      return null;
+  /**
+   * Restore AI engine state from saved data.
+   */
+  restoreState(savedState: any): void {
+    if (!this.engine) return;
+
+    const state = this.engine.getState() as any;
+    if (savedState.history) state.history = savedState.history;
+    if (savedState.currentSceneId) state.currentSceneId = savedState.currentSceneId;
+    if (savedState.currentCharacterIds) state.currentCharacterIds = savedState.currentCharacterIds;
+    if (savedState.variables) state.variables = savedState.variables;
+    if (savedState.mood) state.mood = savedState.mood;
+
+    if (savedState.hasPendingChoice && savedState.pendingChoice) {
+      this.pendingChoice = { choicePoint: savedState.pendingChoice, output: {} as any };
+      this.setState(AIGameState.CHOOSING);
+    } else {
+      this.setState(AIGameState.PLAYING);
     }
   }
 
@@ -249,25 +414,19 @@ export class AIGameController {
   }
 
   // ============================================================
-  // WebGAL Script Conversion
+  // Abort / Reset
   // ============================================================
 
-  /**
-   * Convert AI story output to WebGAL-compatible script format
-   * This produces text that WebGAL's parser can understand
-   */
-  outputToWebGALScript(output: StoryGenerationOutput): string {
-    if (!this.engine) return output.script;
-
-    return this.engine.convertToScript(output);
+  abortGeneration(): void {
+    this.abortController?.abort();
+    this.abortController = null;
   }
 
-  // ============================================================
-  // Reset
-  // ============================================================
-
   reset(): void {
+    this.abortController?.abort();
     this.engine?.reset();
+    this.pendingChoice = null;
+    this.streamingBuffer = '';
     this.state = AIGameState.UNINITIALIZED;
     this.removeCallbacks();
   }
@@ -278,11 +437,12 @@ export class AIGameController {
 
   private setState(state: AIGameState): void {
     this.state = state;
-    logger.info(`[AI] State changed: ${state}`);
+    logger.info(`[AI] State: ${state}`);
   }
 
   private handleGenerationComplete(output: StoryGenerationOutput): void {
     if (output.choicePoint) {
+      this.pendingChoice = { choicePoint: output.choicePoint, output };
       this.setState(AIGameState.CHOOSING);
     } else {
       this.setState(AIGameState.PLAYING);
@@ -293,6 +453,11 @@ export class AIGameController {
   private handleError(error: Error): void {
     this.setState(AIGameState.ERROR);
     logger.error('[AI] Error:', error);
+    // Show error in text box
+    stageStateManager.setStage('showText', `❌ AI 生成失败: ${error.message}\n\n点击继续重试...`);
+    stageStateManager.setStage('showName', '系统');
+    stageStateManager.commit({ notifyReact: true });
+    webgalStore.dispatch(setVisibility({ component: 'showTextBox', visibility: true }));
     this.errorCallbacks.forEach((cb) => cb(error));
   }
 }

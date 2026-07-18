@@ -70,4 +70,17 @@ export function loadGameFromStageData(stageData: ISaveData) {
    * 恢复模糊背景
    */
   setEbg(newStageState.bgName, 0);
+
+  /**
+   * AI State Restoration
+   * If the save contains AI state, restore it to the AI controller.
+   */
+  if (loadFile.aiState && WebGAL.aiController) {
+    try {
+      WebGAL.aiController.restoreState(loadFile.aiState);
+      logger.info('[AI] AI state restored from save');
+    } catch (e) {
+      logger.warn('[AI] Failed to restore AI state:', e);
+    }
+  }
 }

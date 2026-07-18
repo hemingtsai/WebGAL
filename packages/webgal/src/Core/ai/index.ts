@@ -35,6 +35,10 @@ export {
 export * from './aiInitialize';
 export { setProviderApiKey, getConfiguredProviders } from './aiInitialize';
 
+// Memory Manager
+export { ContextMemoryManager, getMemoryManager, resetMemoryManager, estimateTokens } from './memoryManager';
+export type { MemoryConfig } from './memoryManager';
+
 // Providers
 export type { IAIProvider, ChatCompletionOptions, ChatCompletionResponse } from './providers/base';
 export { DeepSeekProvider } from './providers/deepseek';

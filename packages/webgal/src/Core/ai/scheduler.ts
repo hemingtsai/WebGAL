@@ -298,6 +298,117 @@ Choose based on:
   }
 
   /**
+   * Execute a task with streaming support.
+   * Calls onChunk for each text delta as it arrives from the AI.
+   */
+  async executeTaskStreaming(
+    taskRequest: TaskRequest,
+    onChunk: (delta: string) => void,
+    signal?: AbortSignal,
+  ): Promise<TaskResult> {
+    let lastError: Error | null = null;
+    const maxRetries = this.config.maxRetries;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        let modelId: string | undefined;
+        let provider: IAIProvider | undefined;
+
+        if (taskRequest.options?.forceModel) {
+          modelId = taskRequest.options.forceModel;
+          if (modelId) {
+            provider = this.findProviderForModel(modelId);
+          }
+        }
+
+        if (!provider && this.config.strategy === 'ai_dispatch') {
+          const selected = await this.aiSelectModel(taskRequest.taskType, taskRequest);
+          if (selected) {
+            provider = selected.provider;
+            modelId = selected.modelId;
+          }
+        }
+
+        if (!provider) {
+          const selected = this.selectModel(taskRequest.taskType);
+          if (selected) {
+            provider = selected.provider;
+            modelId = selected.modelId;
+          }
+        }
+
+        if (!provider || !modelId) {
+          throw new Error(`No model available for task type: ${taskRequest.taskType}`);
+        }
+
+        const model = provider.getModel(modelId);
+        if (!model) {
+          throw new Error(`Model ${modelId} not found in provider ${provider.id}`);
+        }
+
+        const timeoutMs = this.config.timeoutMs;
+        const abortController = new AbortController();
+        const timeoutId = setTimeout(() => abortController.abort(), timeoutMs);
+
+        if (signal) {
+          signal.addEventListener('abort', () => abortController.abort());
+        }
+
+        try {
+          const response = await provider.streamChatCompletion(
+            {
+              model: modelId,
+              messages: taskRequest.messages,
+              temperature: taskRequest.options?.temperature ?? model.defaultTemperature,
+              maxTokens: taskRequest.options?.maxTokens ?? model.maxTokens,
+              signal: abortController.signal,
+            },
+            (chunk) => {
+              if (chunk.content) {
+                onChunk(chunk.content);
+              }
+            },
+          );
+
+          clearTimeout(timeoutId);
+
+          return {
+            taskId: taskRequest.id,
+            success: true,
+            content: response.content,
+            modelUsed: modelId,
+            providerUsed: provider.id,
+            tokensUsed: response.usage,
+          };
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      } catch (error: any) {
+        lastError = error;
+        if (error?.name === 'AbortError') {
+          return {
+            taskId: taskRequest.id,
+            success: false,
+            content: '',
+            modelUsed: '',
+            providerUsed: '',
+            error: 'Request timed out or was cancelled',
+          };
+        }
+      }
+    }
+
+    return {
+      taskId: taskRequest.id,
+      success: false,
+      content: '',
+      modelUsed: '',
+      providerUsed: '',
+      error: lastError?.message || 'Unknown error',
+    };
+  }
+
+  /**
    * Fixed model selection based on config mapping
    */
   private fixedSelection(taskType: TaskType): { provider: IAIProvider; modelId: string } | null {
