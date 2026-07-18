@@ -30,6 +30,7 @@ import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import { webgalStore } from '@/store/store';
 import { setVisibility } from '@/store/GUIReducer';
 import { showAIChoices, hideAIChoices } from '@/UI/AISetup/AIChoiceUI';
+import { getBGM } from './bgmManager';
 
 /** Provider initialization config */
 export interface ProviderInitConfig {
@@ -157,6 +158,11 @@ export class AIGameController {
     if (!this.engine) throw new Error('Game not initialized');
     if (this.state === AIGameState.CHOOSING) throw new Error('Choice pending');
 
+    // If in error state, try to recover by regenerating
+    if (this.state === AIGameState.ERROR) {
+      logger.info('[AI] Retrying after error...');
+    }
+
     this.setState(AIGameState.GENERATING);
     this.showThinking();
 
@@ -258,6 +264,11 @@ export class AIGameController {
     }
 
     this.generationCallbacks.forEach((cb) => cb(output));
+
+    // Auto-select BGM based on story mood
+    if (output.mood) {
+      getBGM().playBGMForMood(output.mood);
+    }
 
     // Select images based on generated text
     const contentText = output.script || output.summary;
@@ -458,12 +469,21 @@ export class AIGameController {
   private handleError(error: Error): void {
     this.setState(AIGameState.ERROR);
     logger.error('[AI] Error:', error);
-    // Show error in text box
-    stageStateManager.setStage('showText', `❌ AI 生成失败: ${error.message}\n\n点击继续重试...`);
+
+    // Show error with retry option in the text box
+    const errorMsg = `❌ AI 生成失败
+
+${error.message}
+
+点击屏幕重试，或按 Esc 打开设置调整模型。`;
+    stageStateManager.setStage('showText', errorMsg);
     stageStateManager.setStage('showName', '系统');
     stageStateManager.commit({ notifyReact: true });
     webgalStore.dispatch(setVisibility({ component: 'showTextBox', visibility: true }));
     this.errorCallbacks.forEach((cb) => cb(error));
+
+    // Auto-recover: after error, next click will retry
+    // The click handler in Stage.tsx checks if state is ERROR and will retry
   }
 }
 

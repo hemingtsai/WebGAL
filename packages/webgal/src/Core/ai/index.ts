@@ -39,6 +39,10 @@ export { setProviderApiKey, getConfiguredProviders } from './aiInitialize';
 export { ContextMemoryManager, getMemoryManager, resetMemoryManager, estimateTokens } from './memoryManager';
 export type { MemoryConfig } from './memoryManager';
 
+// BGM Manager
+export { AIBGMManager, getBGM } from './bgmManager';
+export type { BGMMoodMap } from './bgmManager';
+
 // Providers
 export type { IAIProvider, ChatCompletionOptions, ChatCompletionResponse } from './providers/base';
 export { DeepSeekProvider } from './providers/deepseek';

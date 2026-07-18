@@ -18,7 +18,7 @@ import { setVisibility } from '@/store/GUIReducer';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 
 const DEFAULT_API_KEYS: Record<string, string> = {
-  deepseek: '',  // User provides via UI
+  deepseek: '',  // Set via setup UI or localStorage
   openai: '',
 };
 
@@ -99,8 +99,8 @@ export async function handleAIChoice(optionIndex: number): Promise<void> {
 function getProviderConfigs() {
   const configs: Array<{ provider: string; apiKey: string; baseURL?: string }> = [];
 
-  for (const [provider] of Object.entries(DEFAULT_API_KEYS)) {
-    const key = localStorage.getItem(`ai_api_key_${provider}`);
+  for (const [provider, defaultKey] of Object.entries(DEFAULT_API_KEYS)) {
+    const key = localStorage.getItem(`ai_api_key_${provider}`) || defaultKey;
     if (key) {
       configs.push({ provider, apiKey: key });
     }
