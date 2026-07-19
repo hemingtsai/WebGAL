@@ -99,6 +99,7 @@ export async function initializeAIGame(): Promise<void> {
 
 /**
  * Continue the AI story — called when user clicks to advance.
+ * First shows the next pending line. If no more lines, generates new content.
  */
 export async function continueAIStory(): Promise<void> {
   const aiController = WebGAL.aiController;
@@ -106,7 +107,15 @@ export async function continueAIStory(): Promise<void> {
 
   const state = aiController.getState();
   if (state === AIGameState.GENERATING) return;
+  if (state === AIGameState.CHOOSING) return; // Don't skip choices
 
+  // If there are pending lines, show the next one
+  if (aiController.hasMoreLines()) {
+    aiController.showNextLine();
+    return;
+  }
+
+  // No pending lines — generate new content
   try {
     logger.info('[AI] Continuing story...');
     await aiController.continueStoryStreaming();

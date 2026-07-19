@@ -65,6 +65,9 @@ export class AIGameController {
   private pendingChoice: PendingChoice | null = null;
   private streamingBuffer = '';
   private abortController: AbortController | null = null;
+  /** Pending script lines to display one per click */
+  private pendingLines: string[] = [];
+  private pendingLineIndex = 0;
 
   // ============================================================
   // Initialization
@@ -215,6 +218,30 @@ export class AIGameController {
   }
 
   // ============================================================
+  // Line-by-line click-to-advance display
+  // ============================================================
+
+  /** Show next pending line. Returns true if more lines remain. */
+  showNextLine(): boolean {
+    if (this.pendingLines.length === 0 || this.pendingLineIndex >= this.pendingLines.length) {
+      return false;
+    }
+    const line = this.pendingLines[this.pendingLineIndex];
+    this.pendingLineIndex++;
+    const parsed = this.tryParseStreamingText(line);
+    stageStateManager.setStage('showText', parsed.text);
+    stageStateManager.setStage('showName', parsed.speaker);
+    stageStateManager.setStage('isDisableTextbox', false);
+    stageStateManager.commit({ notifyReact: true });
+    webgalStore.dispatch(setVisibility({ component: 'showTextBox', visibility: true }));
+    return this.pendingLineIndex < this.pendingLines.length;
+  }
+
+  hasMoreLines(): boolean {
+    return this.pendingLineIndex < this.pendingLines.length;
+  }
+
+  // ============================================================
   // Text Streaming to WebGAL Stage
   // ============================================================
 
@@ -250,20 +277,17 @@ export class AIGameController {
   private async finalizeStreamedText(output: StoryGenerationOutput): Promise<void> {
     this.streamingBuffer = '';
 
-    // Display the parsed script content line by line
+    // Store script lines for click-to-advance display
     if (output.script) {
-      const lines = output.script.split('\n').filter((l: string) => l.trim());
-      for (const line of lines) {
-        const parsed = this.tryParseStreamingText(line);
-        stageStateManager.setStage('showText', parsed.text);
-        stageStateManager.setStage('showName', parsed.speaker);
-        stageStateManager.setStage('isDisableTextbox', false);
-        stageStateManager.commit({ notifyReact: true });
-        webgalStore.dispatch(setVisibility({ component: 'showTextBox', visibility: true }));
-        // Brief pause between lines for readability
-        await new Promise((r) => setTimeout(r, 80));
-      }
+      this.pendingLines = output.script.split('\n').filter((l: string) => l.trim());
+      this.pendingLineIndex = 0;
+    } else {
+      this.pendingLines = [];
+      this.pendingLineIndex = 0;
     }
+
+    // Show first line immediately
+    this.showNextLine();
 
     if (output.choicePoint) {
       this.pendingChoice = { choicePoint: output.choicePoint, output };
