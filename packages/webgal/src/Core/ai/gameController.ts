@@ -232,18 +232,15 @@ export class AIGameController {
 
   /**
    * Stream raw AI text to WebGAL's stage in real-time.
-   * This creates a typewriter-like effect as AI generates.
+   * During streaming, shows a progress indicator.
+   * Final display happens after full JSON parsing.
    */
   private streamTextToStage(chunk: string): void {
     this.streamingBuffer += chunk;
-
-    // Try to extract speaker and text for better display
-    const parsed = this.tryParseStreamingText(this.streamingBuffer);
-
-    stageStateManager.setStage('showText', parsed.text);
-    if (parsed.speaker) {
-      stageStateManager.setStage('showName', parsed.speaker);
-    }
+    // Show a subtle progress indicator — don't try to display partial JSON
+    const dots = '.'.repeat((this.streamingBuffer.length % 3) + 1);
+    stageStateManager.setStage('showText', `⏳ AI 正在生成剧情${dots}`);
+    stageStateManager.setStage('showName', '');
     stageStateManager.commit({ notifyReact: true });
   }
 
@@ -252,6 +249,21 @@ export class AIGameController {
    */
   private async finalizeStreamedText(output: StoryGenerationOutput): Promise<void> {
     this.streamingBuffer = '';
+
+    // Display the parsed script content line by line
+    if (output.script) {
+      const lines = output.script.split('\n').filter((l: string) => l.trim());
+      for (const line of lines) {
+        const parsed = this.tryParseStreamingText(line);
+        stageStateManager.setStage('showText', parsed.text);
+        stageStateManager.setStage('showName', parsed.speaker);
+        stageStateManager.setStage('isDisableTextbox', false);
+        stageStateManager.commit({ notifyReact: true });
+        webgalStore.dispatch(setVisibility({ component: 'showTextBox', visibility: true }));
+        // Brief pause between lines for readability
+        await new Promise((r) => setTimeout(r, 80));
+      }
+    }
 
     if (output.choicePoint) {
       this.pendingChoice = { choicePoint: output.choicePoint, output };

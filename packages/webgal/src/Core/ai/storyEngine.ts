@@ -25,6 +25,7 @@ import {
 import { IAIProvider } from './providers/base';
 import { v4 as uuidv4 } from 'uuid';
 import { getMemoryManager, ContextMemoryManager } from './memoryManager';
+import { logger } from '@/Core/util/logger';
 
 /** Default story state */
 function createInitialState(config: StoryConfig): StoryState {
@@ -375,24 +376,40 @@ export class AIStoryEngine {
   private parseGenerationResponse(result: TaskResult): StoryGenerationOutput {
     let content = result.content.trim();
 
-    // Strip markdown code blocks if present
-    content = content.replace(/^```(?:json)?\s*\n?/i, '');
-    content = content.replace(/\n?```\s*$/, '');
+    // Strip markdown code blocks (any variation)
+    content = content.replace(/```(?:json)?\s*\n?/gi, '');
+    content = content.replace(/```\s*$/g, '');
+    content = content.trim();
+
+    // Try to find JSON object boundaries
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      content = jsonMatch[0];
+    }
 
     try {
       const parsed = JSON.parse(content) as StoryGenerationOutput;
-
-      // Validate required fields
       if (!parsed.script) {
         throw new Error('AI response missing script field');
       }
-
+      // Unescape \n in script field
+      if (parsed.script) {
+        parsed.script = parsed.script.replace(/\\n/g, '\n').replace(/\\"/g, '"');
+      }
       return parsed;
     } catch (error: any) {
-      // If JSON parsing fails, try to extract content as plain text
-      console.warn('Failed to parse AI response as JSON, using raw text:', error);
+      logger.warn('[AI] Failed to parse JSON, using raw text:', error.message);
+      // Fallback: use raw text as narration
+      // Clean up JSON artifacts
+      const cleanText = content
+        .replace(/^[\s\n]*"script"\s*:\s*"/, '')
+        .replace(/"[\s\n]*,[\s\n]*"summary"[\s\S]*$/, '')
+        .replace(/\\n/g, '\n')
+        .replace(/\\"/g, '"')
+        .trim();
+
       return {
-        script: content,
+        script: cleanText || content,
         summary: '',
         sceneId: this.state.currentSceneId,
         characterIds: this.state.currentCharacterIds,

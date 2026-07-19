@@ -48,13 +48,14 @@ ${memorySummary}
 ${outputFormat}
 
 ## 规则
-1. 每次只生成一小段剧情（3-8句对话或叙述），在关键决策点停下来让玩家选择
-2. 生成的剧情要符合角色性格和世界观设定
-3. 对话要自然生动，符合每个角色的说话风格
-4. 适时切换场景和登场的角色
-5. 保持剧情连贯性，不要重复已发生的内容
-6. 在合适的时机（角色面临选择、剧情转折点等）插入选项
-7. 在合适的时机切换背景图和角色立绘`,
+1. 每次生成较长的剧情片段（10-20句对话或叙述），不要写一两句就停
+2. 只在遇到关键剧情转折时才插入选项让玩家选择（大约每2-3次生成才出现一次选项）
+3. 大部分时候 choicePoint 设为 null，让剧情自然推进
+4. 生成的剧情要符合角色性格和世界观设定
+5. 对话要自然生动，符合每个角色的说话风格
+6. 适时切换场景和登场的角色
+7. 保持剧情连贯性，不要重复已发生的内容
+8. 在合适的时机切换背景图和角色立绘`,
   };
 
   const userMessage: ChatMessage = {
@@ -241,32 +242,19 @@ function buildUserPrompt(config: StoryConfig, state: StoryState, historyPrompt: 
 }
 
 function buildOutputFormatPrompt(): string {
-  return `请严格按照以下JSON格式输出（不要包含markdown代码块标记）：
-{
-  "script": "WebGAL脚本命令（参见下方说明）",
-  "summary": "本段剧情的一句话总结",
-  "sceneId": "当前场景ID",
-  "characterIds": ["登场的角色ID列表"],
-  "mood": "本段剧情的情绪基调",
-  "choicePoint": null 或 {
-    "prompt": "选择提示文字",
-    "options": [
-      {"text": "选项文字", "consequence": "该选项的后果简述"}
-    ]
-  }
-}
+  return `请严格按照以下JSON格式输出（直接输出纯JSON，不要用\`\`\`json代码块包裹）：
+{"script":"WebGAL脚本内容","summary":"本段剧情总结","sceneId":"场景ID","characterIds":["角色ID"],"mood":"情绪基调","choicePoint":null}
 
-WebGAL脚本命令格式示例：
-; 旁白/叙述（不带speaker参数）
-旁白：这是场景描述文字
-; 对话
-角色A：你好！ -speaker=角色A
-; 切换背景
-changeBg:背景图文件名
-; 切换立绘
-changeFigure:立绘图文件名 -left
-; 切换场景（需要选项时使用）
-changeScene:场景文件名
+script 字段中的 WebGAL 脚本格式：
+- 旁白直接写文字，不带 speaker 参数
+- 对话格式：角色名：说话内容 -speaker=角色名
+- 切换背景：changeBg:图片文件名
+- 切换立绘：changeFigure:图片文件名 -left
+- 多条命令之间用换行分隔
 
-注意：speaker参数要和角色的名字一致。如果没有choicePoint，则表示剧情继续进行，不需要玩家选择。`;
+注意：
+- script 中的换行符请用 \\n 转义
+- script 中的双引号请用 \\" 转义
+- 如果没有选项，choicePoint 设为 null
+- 有选项时 choicePoint 格式：{"prompt":"提示","options":[{"text":"选项1","consequence":"后果"},{"text":"选项2","consequence":"后果"}]}`;
 }
