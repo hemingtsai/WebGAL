@@ -13,8 +13,11 @@ import useTrans from '@/hooks/useTrans';
 import useLanguage from '@/hooks/useLanguage';
 import languages, { language } from '@/config/language';
 import { useState } from 'react';
-import About from '@/UI/Menu/Options/System/About';
+import { resetConfigManager } from '@/Core/userConfig/configManager';
+import { resetAIGameController } from '@/Core/ai/gameController';
+import { resetMemoryManager } from '@/Core/ai/memoryManager';
 import { WebGAL } from '@/Core/WebGAL';
+import About from '@/UI/Menu/Options/System/About';
 import useSoundEffect from '@/hooks/useSoundEffect';
 import savesReducer, { ISavesData, saveActions } from '@/store/savesReducer';
 import { dumpFastSaveToStorage, dumpSavesToStorage } from '@/Core/controller/storage/savesController';
@@ -220,12 +223,22 @@ export function System() {
                     leftText: t('$common.yes'),
                     rightText: t('$common.no'),
                     leftFunc: () => {
+                      // Clear WebGAL data
                       dispatch(resetAllData());
                       WebGAL.flowchartManager.clearProgress();
                       dumpToStorageFast();
                       dispatch(saveActions.resetSaves());
                       dumpSavesToStorage(0, 200);
                       dumpFastSaveToStorage();
+                      // Clear AI data
+                      resetConfigManager();
+                      resetAIGameController();
+                      resetMemoryManager();
+                      localStorage.removeItem('webgal_ai_story_config');
+                      localStorage.removeItem('ai_api_key_deepseek');
+                      localStorage.removeItem('ai_api_key_openai');
+                      // Reload to show setup wizard
+                      window.location.reload();
                     },
                     rightFunc: () => {},
                   });
