@@ -24,6 +24,7 @@ import {
   PlayOne,
   PreviewCloseOne,
   PreviewOpen,
+  Refresh,
   ReplayMusic,
   Save,
   SettingTwo,
@@ -34,6 +35,8 @@ import { useTranslation } from 'react-i18next';
 import { useDispatch, useSelector } from 'react-redux';
 import styles from './bottomControlPanel.module.scss';
 import { useStageState } from '@/hooks/useStageState';
+import { WebGAL } from '@/Core/WebGAL';
+import { regenerateAIStory } from '@/Core/ai/aiInitialize';
 
 export const BottomControlPanel = () => {
   const t = useTrans('gaming.');
@@ -189,6 +192,28 @@ export const BottomControlPanel = () => {
             />
             <span className={styles.button_text}>{t('buttons.replay')}</span>
           </span>
+          {/* AI Regenerate Button */}
+          {WebGAL.aiController?.isReady() && (
+            <span
+              className={styles.singleButton}
+              style={{ fontSize }}
+              onClick={() => {
+                playSeClick();
+                regenerateAIStory();
+              }}
+              onMouseEnter={playSeEnter}
+              title="重新生成当前剧情"
+            >
+              <Refresh
+                className={styles.button}
+                theme="outline"
+                size={size}
+                fill="#f5f5f7"
+                strokeWidth={strokeWidth}
+              />
+              <span className={styles.button_text}>重新生成</span>
+            </span>
+          )}
           <span
             id="Button_ControlPanel_auto"
             className={styles.singleButton}

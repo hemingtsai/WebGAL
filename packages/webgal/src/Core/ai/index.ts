@@ -33,7 +33,7 @@ export {
 } from './scriptConverter';
 
 export * from './aiInitialize';
-export { setProviderApiKey, getConfiguredProviders, isApiKeyFromEnv } from './aiInitialize';
+export { setProviderApiKey, getConfiguredProviders, isApiKeyFromEnv, regenerateAIStory } from './aiInitialize';
 
 // Memory Manager
 export { ContextMemoryManager, getMemoryManager, resetMemoryManager, estimateTokens } from './memoryManager';

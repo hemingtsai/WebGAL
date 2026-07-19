@@ -97,10 +97,6 @@ export async function initializeAIGame(): Promise<void> {
   WebGAL.aiController = aiController;
 }
 
-/**
- * Continue the AI story — called when user clicks to advance.
- * First shows the next pending line. If no more lines, generates new content.
- */
 export async function continueAIStory(): Promise<void> {
   const aiController = WebGAL.aiController;
   if (!aiController || !aiController.isReady()) return;
@@ -125,7 +121,25 @@ export async function continueAIStory(): Promise<void> {
 }
 
 /**
- * Handle user choice selection.
+ * Regenerate — discard current output and generate fresh content.
+ */
+export async function regenerateAIStory(): Promise<void> {
+  const aiController = WebGAL.aiController;
+  if (!aiController || !aiController.isReady()) return;
+  const state = aiController.getState();
+  if (state === AIGameState.GENERATING || state === AIGameState.CHOOSING) return;
+  try {
+    logger.info('[AI] Regenerating...');
+    aiController.reset();
+    await aiController.initializeGame();
+    await aiController.continueStoryStreaming();
+  } catch (error: any) {
+    logger.error('[AI] Regenerate failed:', error);
+  }
+}
+
+/**
+ * Handle user choice selection with streaming continuation.
  */
 export async function handleAIChoice(optionIndex: number): Promise<void> {
   const aiController = WebGAL.aiController;
