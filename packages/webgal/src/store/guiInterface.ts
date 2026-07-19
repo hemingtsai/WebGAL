@@ -7,6 +7,7 @@ export enum MenuPanelTag {
   Option, // "设置"选项卡
   Flowchart, // "流程图"选项卡
   Ai, // "AI"选项卡
+  Story, // "故事设定"选项卡
 }
 
 /**

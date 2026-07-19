@@ -9,6 +9,7 @@ import { RootState } from '@/store/store';
 import { MenuPanelTag } from '@/store/guiInterface';
 import { Flowchart } from '@/UI/Flowchart/Flowchart';
 import { AiSettings } from './Ai/Ai';
+import { StorySettings } from './Story/Story';
 
 /**
  * Menu 页面，包括存读档、选项等
@@ -36,6 +37,9 @@ const Menu: FC = () => {
       break;
     case MenuPanelTag.Ai:
       currentTag = <AiSettings />;
+      break;
+    case MenuPanelTag.Story:
+      currentTag = <StorySettings />;
       break;
   }
   return (

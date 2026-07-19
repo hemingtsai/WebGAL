@@ -27,6 +27,7 @@ export const MenuPanel = () => {
   const OptionTagOn = GUIState.currentMenuTag === MenuPanelTag.Option ? ` ${styles.MenuPanel_button_hl}` : ``;
   const FlowchartTagOn = GUIState.currentMenuTag === MenuPanelTag.Flowchart ? ` ${styles.MenuPanel_button_hl}` : ``;
   const AiTagOn = GUIState.currentMenuTag === MenuPanelTag.Ai ? ` ${styles.MenuPanel_button_hl}` : ``;
+  const StoryTagOn = GUIState.currentMenuTag === MenuPanelTag.Story ? ` ${styles.MenuPanel_button_hl}` : ``;
 
   // 设置Menu按钮的颜色
   const SaveTagColor = GUIState.currentMenuTag === MenuPanelTag.Save ? `rgba(74, 34, 93, 0.9)` : `rgba(123,144,169,1)`;
@@ -35,6 +36,7 @@ export const MenuPanel = () => {
     GUIState.currentMenuTag === MenuPanelTag.Option ? `rgba(81, 110, 65, 0.9)` : `rgba(123,144,169,1)`;
   const FlowchartTagColor = GUIState.currentMenuTag === MenuPanelTag.Flowchart ? `#2B5F75` : `rgba(123,144,169,1)`;
   const AiTagColor = GUIState.currentMenuTag === MenuPanelTag.Ai ? `rgba(196,77,255,0.9)` : `rgba(123,144,169,1)`;
+  const StoryTagColor = GUIState.currentMenuTag === MenuPanelTag.Story ? `rgba(255,140,60,0.9)` : `rgba(123,144,169,1)`;
 
   // 设置Menu图标的颜色
   const SaveIconColor = GUIState.currentMenuTag === MenuPanelTag.Save ? `rgba(74, 34, 93, 0.9)` : `rgba(123,144,169,1)`;
@@ -44,6 +46,7 @@ export const MenuPanel = () => {
     GUIState.currentMenuTag === MenuPanelTag.Option ? `rgba(81, 110, 65, 0.9)` : `rgba(123,144,169,1)`;
   const FlowchartIconColor = GUIState.currentMenuTag === MenuPanelTag.Flowchart ? `#2B5F75` : `rgba(123,144,169,1)`;
   const AiIconColor = GUIState.currentMenuTag === MenuPanelTag.Ai ? `rgba(196,77,255,0.9)` : `rgba(123,144,169,1)`;
+  const StoryIconColor = GUIState.currentMenuTag === MenuPanelTag.Story ? `rgba(255,140,60,0.9)` : `rgba(123,144,169,1)`;
 
   return (
     <div className={styles.MenuPanel_main}>
@@ -72,6 +75,18 @@ export const MenuPanel = () => {
         }}
         tagName={'AI'}
         key="aiButton"
+      />
+      <MenuPanelButton
+        iconName="story"
+        buttonOnClassName={StoryTagOn}
+        iconColor={StoryIconColor}
+        tagColor={StoryTagColor}
+        clickFunc={() => {
+          playSePageChange();
+          dispatch(setMenuPanelTag(MenuPanelTag.Story));
+        }}
+        tagName={'故事'}
+        key="storyButton"
       />
       <MenuPanelButton
         iconName="save"
