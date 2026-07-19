@@ -51,8 +51,8 @@ export function StorySettings() {
   };
 
   return (
-    <div className={styles.Options_main_content}>
-      <div style={{ width: '95%', padding: '0 0 0 3em', maxHeight: '75vh', display: 'flex', flexDirection: 'column' }}>
+    <div className={styles.Options_main_content} style={{ overflow: 'hidden' }}>
+      <div style={{ width: '95%', padding: '0 0 0 3em', height: '100%', display: 'flex', flexDirection: 'column' }}>
         {/* Top: Sub-tab buttons */}
         <div style={{ flexShrink: 0 }}>
           <NormalOption key="subTabs" title="编辑">
