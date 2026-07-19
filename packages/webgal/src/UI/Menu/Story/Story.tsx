@@ -52,32 +52,36 @@ export function StorySettings() {
 
   return (
     <div className={styles.Options_main_content}>
-      <div className={styles.Options_main_content_half}>
-        {/* Sub-tab buttons */}
-        <NormalOption key="subTabs" title="编辑">
-          <NormalButton
-            textList={TAB_LABELS}
-            functionList={TAB_KEYS.map((tab) => () => setSubTab(tab))}
-            currentChecked={TAB_KEYS.indexOf(subTab)}
-          />
-        </NormalOption>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '95%', padding: '0 0 0 3em' }}>
+        {/* Top: Sub-tab buttons */}
+        <div style={{ flexShrink: 0 }}>
+          <NormalOption key="subTabs" title="编辑">
+            <NormalButton
+              textList={TAB_LABELS}
+              functionList={TAB_KEYS.map((tab) => () => setSubTab(tab))}
+              currentChecked={TAB_KEYS.indexOf(subTab)}
+            />
+          </NormalOption>
+        </div>
 
-        {/* Content */}
-        <div style={{ maxHeight: '50vh', overflow: 'auto', marginTop: '8px' }}>
+        {/* Middle: Scrollable content */}
+        <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
           {subTab === 'world' && <WorldEditor world={world} setWorld={setWorld} />}
           {subTab === 'characters' && <CharactersEditor characters={characters} setCharacters={setCharacters} />}
           {subTab === 'scenes' && <ScenesEditor scenes={scenes} setScenes={setScenes} />}
           {subTab === 'beginning' && <BeginningEditor beginning={beginning} setBeginning={setBeginning} />}
         </div>
 
-        {/* Save button */}
-        <NormalOption key="save" title="">
-          <NormalButton
-            textList={['💾 保存故事设定']}
-            functionList={[saveAll]}
-            currentChecked={-1}
-          />
-        </NormalOption>
+        {/* Bottom: Save button */}
+        <div style={{ flexShrink: 0, paddingTop: '8px' }}>
+          <NormalOption key="save" title="">
+            <NormalButton
+              textList={['💾 保存故事设定']}
+              functionList={[saveAll]}
+              currentChecked={-1}
+            />
+          </NormalOption>
+        </div>
       </div>
     </div>
   );

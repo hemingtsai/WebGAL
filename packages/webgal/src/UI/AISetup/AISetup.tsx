@@ -79,7 +79,7 @@ export function AISetup() {
       fontFamily: '"Microsoft YaHei","PingFang SC",sans-serif',
       overflow: 'auto', padding: '40px 20px',
     }}>
-      <div style={{ maxWidth: '700px', width: '100%' }}>
+      <div style={{ maxWidth: '700px', width: '100%', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
         {/* Title */}
         <h1 style={{
           textAlign: 'center', fontSize: '180%', marginBottom: '24px',
@@ -96,15 +96,18 @@ export function AISetup() {
         )}
 
         {/* Step indicator */}
-        <NormalOption key="steps" title={`步骤 ${currentStepIndex + 1} / ${STEPS.length}`}>
-          <NormalButton
-            textList={STEP_LABELS}
-            functionList={STEPS.map((s) => () => setStep(s))}
-            currentChecked={currentStepIndex}
-          />
-        </NormalOption>
+        <div style={{ flexShrink: 0 }}>
+          <NormalOption key="steps" title={`步骤 ${currentStepIndex + 1} / ${STEPS.length}`}>
+            <NormalButton
+              textList={STEP_LABELS}
+              functionList={STEPS.map((s) => () => setStep(s))}
+              currentChecked={currentStepIndex}
+            />
+          </NormalOption>
+        </div>
 
-        <div style={{ marginTop: '16px', minHeight: '300px' }}>
+        {/* Content (scrollable middle) */}
+        <div style={{ flex: 1, overflow: 'auto', minHeight: 0, marginTop: '16px' }}>
           {step === 'api' && <ApiStep apiKey={apiKey} setApiKey={setApiKey} envHasKey={envHasKey} />}
           {step === 'template' && <TemplateStep onApply={(cfg) => {
             setWorld(cfg.worldSetting);
@@ -116,24 +119,34 @@ export function AISetup() {
           {step === 'world' && <WorldStep world={world} setWorld={setWorld} />}
           {step === 'characters' && <CharacterStep characters={characters} setCharacters={setCharacters} />}
           {step === 'scenes' && <SceneStep scenes={scenes} setScenes={setScenes} />}
-          {step === 'beginning' && <BeginningStep beginning={beginning} setBeginning={setBeginning} onStart={handleStart} isStarting={isStarting} />}
+          {step === 'beginning' && <BeginningStep beginning={beginning} setBeginning={setBeginning} />}
         </div>
 
-        {/* Navigation */}
-        {step !== 'beginning' && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px' }}>
-            <NormalButton
-              textList={currentStepIndex > 0 ? ['← 上一步'] : []}
-              functionList={[() => setStep(STEPS[currentStepIndex - 1])]}
-              currentChecked={-1}
-            />
-            <NormalButton
-              textList={['下一步 →']}
-              functionList={[() => setStep(STEPS[currentStepIndex + 1])]}
-              currentChecked={-1}
-            />
-          </div>
-        )}
+        {/* Bottom Navigation */}
+        <div style={{ flexShrink: 0, paddingTop: '16px' }}>
+          {step !== 'beginning' ? (
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <NormalButton
+                textList={currentStepIndex > 0 ? ['← 上一步'] : []}
+                functionList={[() => setStep(STEPS[currentStepIndex - 1])]}
+                currentChecked={-1}
+              />
+              <NormalButton
+                textList={['下一步 →']}
+                functionList={[() => setStep(STEPS[currentStepIndex + 1])]}
+                currentChecked={-1}
+              />
+            </div>
+          ) : (
+            <NormalOption key="start" title="">
+              <NormalButton
+                textList={[isStarting ? '⏳ 正在初始化...' : '🚀 开始游戏']}
+                functionList={[handleStart]}
+                currentChecked={-1}
+              />
+            </NormalOption>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -325,8 +338,8 @@ function SceneStep({ scenes, setScenes }: { scenes: Scene[]; setScenes: (s: Scen
   );
 }
 
-function BeginningStep({ beginning, setBeginning, onStart, isStarting }: {
-  beginning: string; setBeginning: (v: string) => void; onStart: () => void; isStarting: boolean;
+function BeginningStep({ beginning, setBeginning }: {
+  beginning: string; setBeginning: (v: string) => void;
 }) {
   return (
     <>
@@ -341,13 +354,6 @@ function BeginningStep({ beginning, setBeginning, onStart, isStarting }: {
       <p style={{ fontSize: '120%', color: '#888', margin: '12px 0' }}>
         故事开头越详细，AI 生成的剧情就越贴合期望。建议包含初始场景、出场角色、起点事件。
       </p>
-      <NormalOption key="start" title="">
-        <NormalButton
-          textList={[isStarting ? '⏳ 正在初始化...' : '🚀 开始游戏']}
-          functionList={[onStart]}
-          currentChecked={-1}
-        />
-      </NormalOption>
     </>
   );
 }
