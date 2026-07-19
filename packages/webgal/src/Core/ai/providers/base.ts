@@ -52,8 +52,8 @@ export interface IAIProvider {
   readonly name: string;
   /** Base URL for API requests */
   readonly baseURL: string;
-  /** Available models for this provider */
-  readonly models: AIModel[];
+  /** Available models (updated after fetchModels) */
+  models: AIModel[];
 
   /**
    * Send a chat completion request (batch/one-shot)
@@ -62,12 +62,17 @@ export interface IAIProvider {
 
   /**
    * Send a streaming chat completion request.
-   * Calls onChunk for each text delta, returns the full response at the end.
    */
   streamChatCompletion(
     options: ChatCompletionOptions,
     onChunk: StreamCallback,
   ): Promise<ChatCompletionResponse>;
+
+  /**
+   * Fetch available models from the provider's API.
+   * Updates the models list and returns it.
+   */
+  fetchModels(): Promise<AIModel[]>;
 
   /**
    * Check if the provider is healthy/available

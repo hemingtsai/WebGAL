@@ -18,6 +18,7 @@ import {
   ChatMessage,
 } from './types';
 import { IAIProvider } from './providers/base';
+import { logger } from '@/Core/util/logger';
 
 /** Registry of all registered AI providers */
 const providerRegistry = new Map<string, IAIProvider>();
@@ -48,19 +49,20 @@ export class AIScheduler {
   }
 
   /**
-   * Register an AI provider
+   * Register an AI provider and fetch its models from API.
+   * Models are fetched asynchronously; fallbacks are used until then.
    */
   registerProvider(provider: IAIProvider): void {
     this.providers.set(provider.id, provider);
     // Build model -> provider mapping
-    for (const model of provider.models) {
-      this.modelProviderMap.set(`${provider.id}:${model.id}`, provider);
-      // Also register with just model ID for convenience
-      if (!this.modelProviderMap.has(model.id)) {
-        this.modelProviderMap.set(model.id, provider);
-      }
-    }
+    this.rebuildModelMap(provider);
     providerRegistry.set(provider.id, provider);
+
+    // Fetch models from API (fire-and-forget, updates models when done)
+    provider.fetchModels().then((models) => {
+      this.rebuildModelMap(provider);
+      logger.info(`[Scheduler] Provider ${provider.id}: ${models.length} models available`);
+    }).catch(() => {});
   }
 
   /**
@@ -68,6 +70,21 @@ export class AIScheduler {
    */
   getProvider(providerId: string): IAIProvider | undefined {
     return this.providers.get(providerId);
+  }
+
+  /**
+   * Rebuild model→provider mapping for a given provider.
+   */
+  private rebuildModelMap(provider: IAIProvider): void {
+    for (const [key, p] of this.modelProviderMap) {
+      if (p.id === provider.id) this.modelProviderMap.delete(key);
+    }
+    for (const model of provider.models) {
+      this.modelProviderMap.set(`${provider.id}:${model.id}`, provider);
+      if (!this.modelProviderMap.has(model.id)) {
+        this.modelProviderMap.set(model.id, provider);
+      }
+    }
   }
 
   /**

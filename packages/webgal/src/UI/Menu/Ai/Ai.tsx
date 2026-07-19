@@ -13,7 +13,7 @@ import { getAIGameController, AIGameState } from '@/Core/ai/gameController';
 import { getMemoryManager } from '@/Core/ai/memoryManager';
 import { getBGM } from '@/Core/ai/bgmManager';
 import { getConfiguredProviders } from '@/Core/ai/aiInitialize';
-import type { SchedulerConfig, TaskType, SchedulingStrategy } from '@/Core/ai/types';
+import type { SchedulerConfig, TaskType, SchedulingStrategy, AIModel } from '@/Core/ai/types';
 import { NormalOption } from '@/UI/Menu/Options/NormalOption';
 import { NormalButton } from '@/UI/Menu/Options/NormalButton';
 import { OptionSlider } from '@/UI/Menu/Options/OptionSlider';
@@ -47,13 +47,21 @@ export function AiSettings() {
   const [config, setConfig] = useState<SchedulerConfig>(scheduler.getConfig());
   const [aiState, setAiState] = useState<AIGameState>(aiController.getState());
   const [bgmOn, setBgmOn] = useState(true);
+  const [allModels, setAllModels] = useState(scheduler.getAllModels());
+
+  const refreshModels = async () => {
+    const provs = scheduler.getAllProviders();
+    for (const p of provs) {
+      await p.fetchModels();
+    }
+    setAllModels(scheduler.getAllModels());
+  };
 
   useEffect(() => {
     const interval = setInterval(() => setAiState(aiController.getState()), 1000);
     return () => clearInterval(interval);
   }, []);
 
-  const allModels = scheduler.getAllModels();
   const memStats = memory.getStats();
   const providers = getConfiguredProviders();
 
@@ -70,8 +78,8 @@ export function AiSettings() {
   };
 
   // Model list for NormalButton
-  const modelIds = allModels.map((m) => m.id);
-  const modelLabels = allModels.map((m) => `[${m.provider}] ${m.name}`);
+  const modelIds = allModels.map((m: AIModel) => m.id);
+  const modelLabels = allModels.map((m: AIModel) => `[${m.provider}] ${m.name}`);
 
   // Strategy index for NormalButton
   const strategyIndex = STRATEGY_NAMES.indexOf(config.strategy);
@@ -87,6 +95,11 @@ export function AiSettings() {
             <span style={{ marginLeft: '12px', fontSize: '80%' }}>
               {allModels.length}模型 | {providers.join(',') || '无'} | 记忆摘要{memStats.summaryCount}
             </span>
+            <NormalButton
+              textList={['🔄 刷新模型列表']}
+              functionList={[refreshModels]}
+              currentChecked={-1}
+            />
           </div>
         </NormalOption>
 
