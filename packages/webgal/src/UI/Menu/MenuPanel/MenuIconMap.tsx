@@ -1,5 +1,5 @@
 import { IMenuPanel } from '@/UI/Menu/MenuPanel/menuPanelInterface';
-import { FolderOpen, Home, Logout, Save, SettingTwo, TreeDiagram } from '@icon-park/react';
+import { FolderOpen, Home, Logout, Save, SettingTwo, TreeDiagram, Robot } from '@icon-park/react';
 
 /**
  * 通过图标名称返回正确的图标
@@ -26,6 +26,9 @@ export const MenuIconMap = (props: IMenuPanel) => {
       break;
     case 'exit':
       returnIcon = <Logout theme="outline" size="1.2em" fill={props.iconColor} strokeWidth={2} />;
+      break;
+    case 'ai':
+      returnIcon = <Robot theme="outline" size="1.2em" fill={props.iconColor} strokeWidth={2} />;
       break;
     default:
       returnIcon = <div />;

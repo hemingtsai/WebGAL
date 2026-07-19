@@ -26,6 +26,7 @@ export const MenuPanel = () => {
   const LoadTagOn = GUIState.currentMenuTag === MenuPanelTag.Load ? ` ${styles.MenuPanel_button_hl}` : ``;
   const OptionTagOn = GUIState.currentMenuTag === MenuPanelTag.Option ? ` ${styles.MenuPanel_button_hl}` : ``;
   const FlowchartTagOn = GUIState.currentMenuTag === MenuPanelTag.Flowchart ? ` ${styles.MenuPanel_button_hl}` : ``;
+  const AiTagOn = GUIState.currentMenuTag === MenuPanelTag.Ai ? ` ${styles.MenuPanel_button_hl}` : ``;
 
   // 设置Menu按钮的颜色
   const SaveTagColor = GUIState.currentMenuTag === MenuPanelTag.Save ? `rgba(74, 34, 93, 0.9)` : `rgba(123,144,169,1)`;
@@ -33,6 +34,7 @@ export const MenuPanel = () => {
   const OptionTagColor =
     GUIState.currentMenuTag === MenuPanelTag.Option ? `rgba(81, 110, 65, 0.9)` : `rgba(123,144,169,1)`;
   const FlowchartTagColor = GUIState.currentMenuTag === MenuPanelTag.Flowchart ? `#2B5F75` : `rgba(123,144,169,1)`;
+  const AiTagColor = GUIState.currentMenuTag === MenuPanelTag.Ai ? `rgba(196,77,255,0.9)` : `rgba(123,144,169,1)`;
 
   // 设置Menu图标的颜色
   const SaveIconColor = GUIState.currentMenuTag === MenuPanelTag.Save ? `rgba(74, 34, 93, 0.9)` : `rgba(123,144,169,1)`;
@@ -41,6 +43,7 @@ export const MenuPanel = () => {
   const OptionIconColor =
     GUIState.currentMenuTag === MenuPanelTag.Option ? `rgba(81, 110, 65, 0.9)` : `rgba(123,144,169,1)`;
   const FlowchartIconColor = GUIState.currentMenuTag === MenuPanelTag.Flowchart ? `#2B5F75` : `rgba(123,144,169,1)`;
+  const AiIconColor = GUIState.currentMenuTag === MenuPanelTag.Ai ? `rgba(196,77,255,0.9)` : `rgba(123,144,169,1)`;
 
   return (
     <div className={styles.MenuPanel_main}>
@@ -58,6 +61,18 @@ export const MenuPanel = () => {
           key="flowchartButton"
         />
       )}
+      <MenuPanelButton
+        iconName="ai"
+        buttonOnClassName={AiTagOn}
+        iconColor={AiIconColor}
+        tagColor={AiTagColor}
+        clickFunc={() => {
+          playSePageChange();
+          dispatch(setMenuPanelTag(MenuPanelTag.Ai));
+        }}
+        tagName={'AI'}
+        key="aiButton"
+      />
       <MenuPanelButton
         iconName="save"
         buttonOnClassName={SaveTagOn}
