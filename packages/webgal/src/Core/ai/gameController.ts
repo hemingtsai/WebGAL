@@ -29,6 +29,9 @@ import { logger } from '@/Core/util/logger';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import { webgalStore } from '@/store/store';
 import { setVisibility } from '@/store/GUIReducer';
+import { createSaySentence } from './scriptConverter';
+import { runScript } from '@/Core/controller/gamePlay/runScript';
+import { stopAllPerform } from '@/Core/controller/gamePlay/stopAllPerform';
 import { showAIChoices, hideAIChoices } from '@/UI/AISetup/AIChoiceUI';
 import { getBGM } from './bgmManager';
 
@@ -222,18 +225,23 @@ export class AIGameController {
   // ============================================================
 
   /** Show next pending line. Returns true if more lines remain. */
+  /** Show next pending line via WebGAL's native script execution. Returns true if more lines remain. */
   showNextLine(): boolean {
     if (this.pendingLines.length === 0 || this.pendingLineIndex >= this.pendingLines.length) {
       return false;
     }
     const line = this.pendingLines[this.pendingLineIndex];
     this.pendingLineIndex++;
+
     const parsed = this.tryParseStreamingText(line);
-    stageStateManager.setStage('showText', parsed.text);
-    stageStateManager.setStage('showName', parsed.speaker);
-    stageStateManager.setStage('isDisableTextbox', false);
-    stageStateManager.commit({ notifyReact: true });
-    webgalStore.dispatch(setVisibility({ component: 'showTextBox', visibility: true }));
+
+    // Use WebGAL's native say command for proper typewriter text animation
+    const sentence = createSaySentence(parsed.text, parsed.speaker || undefined);
+    // Stop previous line's animation, then start this one
+    stopAllPerform();
+    runScript(sentence);
+    WebGAL.gameplay.performController.commitPendingPerforms();
+
     return this.pendingLineIndex < this.pendingLines.length;
   }
 
