@@ -79,9 +79,7 @@ export async function initializeAIGame(): Promise<void> {
   try {
     const providers = getProviderConfigs();
     if (providers.length === 0) {
-      logger.warn('[AI] No API keys configured — showing setup UI');
-      WebGAL.aiController = aiController;
-      return;
+      throw new Error('No API keys configured. Please set VITE_DEEPSEEK_API_KEY in .env or enter a key.');
     }
 
     aiController.initializeProviders(providers);
