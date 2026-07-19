@@ -13,7 +13,7 @@
 import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { getConfigManager } from '@/Core/userConfig/configManager';
-import { setProviderApiKey, getConfiguredProviders } from '@/Core/ai/aiInitialize';
+import { setProviderApiKey, getConfiguredProviders, isApiKeyFromEnv } from '@/Core/ai/aiInitialize';
 import { initializeAIGame } from '@/Core/ai/aiInitialize';
 import { WebGAL } from '@/Core/WebGAL';
 import { STORY_TEMPLATES, applyTemplate } from '@/Core/userConfig/templates';
@@ -355,30 +355,48 @@ export function AISetup() {
 // ============================================================
 
 function APIStep({ apiKeys, setApiKeys }: { apiKeys: Record<string, string>; setApiKeys: (v: Record<string, string>) => void }) {
+  const deepseekFromEnv = isApiKeyFromEnv('deepseek');
+  const openaiFromEnv = isApiKeyFromEnv('openai');
+
   return (
     <div style={styles.section}>
       <h2 style={styles.sectionTitle}>API 密钥配置</h2>
       <p style={{ color: '#999', fontSize: '13px', marginBottom: '16px' }}>
-        配置 AI 提供商的 API 密钥。密钥仅保存在浏览器本地存储中。
+        密钥优先从 <code>.env</code> 文件读取（VITE_DEEPSEEK_API_KEY）。
+        留空则使用 .env 中的密钥。
       </p>
       <div style={styles.field}>
-        <label style={styles.label}>DeepSeek API Key</label>
+        <label style={styles.label}>
+          DeepSeek API Key
+          {deepseekFromEnv && (
+            <span style={{ color: '#44cc44', marginLeft: '8px', fontSize: '12px' }}>
+              ✅ 已从 .env 加载
+            </span>
+          )}
+        </label>
         <input
           style={styles.input}
           type="password"
           value={apiKeys.deepseek || ''}
           onChange={(e) => setApiKeys({ ...apiKeys, deepseek: e.target.value })}
-          placeholder="sk-..."
+          placeholder={deepseekFromEnv ? '已从 .env 加载，留空使用' : 'sk-...'}
         />
       </div>
       <div style={styles.field}>
-        <label style={styles.label}>OpenAI API Key (可选)</label>
+        <label style={styles.label}>
+          OpenAI API Key (可选)
+          {openaiFromEnv && (
+            <span style={{ color: '#44cc44', marginLeft: '8px', fontSize: '12px' }}>
+              ✅ 已从 .env 加载
+            </span>
+          )}
+        </label>
         <input
           style={styles.input}
           type="password"
           value={apiKeys.openai || ''}
           onChange={(e) => setApiKeys({ ...apiKeys, openai: e.target.value })}
-          placeholder="sk-..."
+          placeholder={openaiFromEnv ? '已从 .env 加载，留空使用' : 'sk-...'}
         />
       </div>
     </div>

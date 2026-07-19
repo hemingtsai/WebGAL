@@ -27,3 +27,8 @@ stats.html
 packages/webgal/public/game.old
 packages/parser/build
 packages/webgal/src/Core/util/pixiPerformManager/initRegister.ts
+
+# Environment variables (API keys)
+.env
+.env.local
+.env.*.local

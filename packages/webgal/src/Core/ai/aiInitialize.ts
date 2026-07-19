@@ -2,11 +2,10 @@
  * AI-Powered Game Initialization
  *
  * New entry point replacing the original initializeScript.
- * Steps:
- * 1. Load user config
- * 2. Init providers with API keys
- * 3. Generate first story segment (streaming to stage)
- * 4. Wire up click-to-continue for AI story flow
+ * API keys are loaded from environment variables (.env) by default,
+ * with localStorage as an override for users who want to use different keys.
+ *
+ * Priority: localStorage > .env > default
  */
 
 import { WebGAL } from '@/Core/WebGAL';
@@ -15,12 +14,52 @@ import { getAIGameController, AIGameState } from '@/Core/ai/gameController';
 import { getConfigManager } from '@/Core/userConfig/configManager';
 import { webgalStore } from '@/store/store';
 import { setVisibility } from '@/store/GUIReducer';
-import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 
-const DEFAULT_API_KEYS: Record<string, string> = {
-  deepseek: '',  // Set via setup UI or localStorage
-  openai: '',
-};
+// ============================================================
+// API Key Configuration
+// ============================================================
+
+/**
+ * Read API key from Vite environment variables.
+ * Vite exposes VITE_* vars via import.meta.env at build time.
+ * Priority: localStorage (user-set in UI) > .env file > default
+ */
+function getApiKey(provider: string): string {
+  // 1. Check localStorage (user manually set via UI)
+  const localKey = localStorage.getItem(`ai_api_key_${provider}`);
+  if (localKey) return localKey;
+
+  // 2. Check Vite env vars (from .env file)
+  const envKeyMap: Record<string, string | undefined> = {
+    deepseek: import.meta.env.VITE_DEEPSEEK_API_KEY as string | undefined,
+    openai: import.meta.env.VITE_OPENAI_API_KEY as string | undefined,
+  };
+  const envKey = envKeyMap[provider];
+  if (envKey) return envKey;
+
+  return '';
+}
+
+/**
+ * Get all available provider configs (with valid API keys).
+ */
+function getProviderConfigs() {
+  const configs: Array<{ provider: string; apiKey: string; baseURL?: string }> = [];
+  const providers = ['deepseek', 'openai'];
+
+  for (const provider of providers) {
+    const key = getApiKey(provider);
+    if (key) {
+      configs.push({ provider, apiKey: key });
+    }
+  }
+
+  return configs;
+}
+
+// ============================================================
+// Public API
+// ============================================================
 
 /**
  * Initialize the AI-powered game engine.
@@ -38,18 +77,19 @@ export async function initializeAIGame(): Promise<void> {
   }
 
   try {
-    // Step 1: Init providers
     const providers = getProviderConfigs();
-    aiController.initializeProviders(providers);
+    if (providers.length === 0) {
+      logger.warn('[AI] No API keys configured — showing setup UI');
+      WebGAL.aiController = aiController;
+      return;
+    }
 
-    // Step 2: Init engine with config
+    aiController.initializeProviders(providers);
     await aiController.initializeGame();
 
-    // Step 3: Generate the first story segment with streaming
     logger.info('[AI] Generating first story segment...');
     await aiController.startStoryStreaming();
 
-    // Step 4: Hide title and show game
     webgalStore.dispatch(setVisibility({ component: 'showTitle', visibility: false }));
     webgalStore.dispatch(setVisibility({ component: 'showTextBox', visibility: true }));
   } catch (error: any) {
@@ -61,14 +101,13 @@ export async function initializeAIGame(): Promise<void> {
 
 /**
  * Continue the AI story — called when user clicks to advance.
- * Uses streaming to show text in real-time.
  */
 export async function continueAIStory(): Promise<void> {
   const aiController = WebGAL.aiController;
   if (!aiController || !aiController.isReady()) return;
 
   const state = aiController.getState();
-  if (state === AIGameState.GENERATING) return; // Already generating
+  if (state === AIGameState.GENERATING) return;
 
   try {
     logger.info('[AI] Continuing story...');
@@ -79,7 +118,7 @@ export async function continueAIStory(): Promise<void> {
 }
 
 /**
- * Handle user choice selection with streaming continuation.
+ * Handle user choice selection.
  */
 export async function handleAIChoice(optionIndex: number): Promise<void> {
   const aiController = WebGAL.aiController;
@@ -94,23 +133,7 @@ export async function handleAIChoice(optionIndex: number): Promise<void> {
 }
 
 /**
- * Get provider configs from stored API keys
- */
-function getProviderConfigs() {
-  const configs: Array<{ provider: string; apiKey: string; baseURL?: string }> = [];
-
-  for (const [provider, defaultKey] of Object.entries(DEFAULT_API_KEYS)) {
-    const key = localStorage.getItem(`ai_api_key_${provider}`) || defaultKey;
-    if (key) {
-      configs.push({ provider, apiKey: key });
-    }
-  }
-
-  return configs;
-}
-
-/**
- * Set an API key for a provider
+ * Set an API key for a provider (saves to localStorage, overrides .env).
  */
 export function setProviderApiKey(provider: string, apiKey: string): void {
   localStorage.setItem(`ai_api_key_${provider}`, apiKey);
@@ -118,15 +141,31 @@ export function setProviderApiKey(provider: string, apiKey: string): void {
 }
 
 /**
- * Get all configured API key providers
+ * Get all configured API key providers (from any source).
  */
 export function getConfiguredProviders(): string[] {
   const providers: string[] = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key?.startsWith('ai_api_key_')) {
-      providers.push(key.replace('ai_api_key_', ''));
+  const allProviders = ['deepseek', 'openai'];
+
+  for (const p of allProviders) {
+    if (getApiKey(p)) {
+      providers.push(p);
     }
   }
+
   return providers;
+}
+
+/**
+ * Check if the API key comes from env (vs localStorage).
+ */
+export function isApiKeyFromEnv(provider: string): boolean {
+  const localKey = localStorage.getItem(`ai_api_key_${provider}`);
+  if (localKey) return false;
+
+  const envKeyMap: Record<string, string | undefined> = {
+    deepseek: import.meta.env.VITE_DEEPSEEK_API_KEY as string | undefined,
+    openai: import.meta.env.VITE_OPENAI_API_KEY as string | undefined,
+  };
+  return !!envKeyMap[provider];
 }
