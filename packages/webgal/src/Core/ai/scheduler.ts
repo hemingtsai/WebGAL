@@ -37,6 +37,8 @@ const DEFAULT_SCHEDULER_CONFIG: SchedulerConfig = {
   timeoutMs: 60000,
 };
 
+const STORAGE_KEY = 'webgal_ai_scheduler_config';
+
 export class AIScheduler {
   private config: SchedulerConfig;
   private providers: Map<string, IAIProvider>;
@@ -44,7 +46,9 @@ export class AIScheduler {
   private modelProviderMap = new Map<string, IAIProvider>();
 
   constructor(config?: Partial<SchedulerConfig>) {
-    this.config = { ...DEFAULT_SCHEDULER_CONFIG, ...config };
+    // Load from localStorage, fall back to defaults
+    const saved = this.loadConfig();
+    this.config = { ...DEFAULT_SCHEDULER_CONFIG, ...saved, ...config };
     this.providers = new Map();
   }
 
@@ -482,6 +486,7 @@ Choose based on:
    */
   updateConfig(config: Partial<SchedulerConfig>): void {
     this.config = { ...this.config, ...config };
+    this.saveConfig();
   }
 
   /**
@@ -489,6 +494,21 @@ Choose based on:
    */
   getConfig(): SchedulerConfig {
     return { ...this.config };
+  }
+
+  private saveConfig(): void {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.config));
+    } catch { /* ignore */ }
+  }
+
+  private loadConfig(): Partial<SchedulerConfig> | null {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
   }
 }
 

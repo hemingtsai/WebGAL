@@ -184,7 +184,11 @@ export function AISetup() {
     if (errors.length > 0) { setError(errors.map((e) => e.message).join('\n')); return; }
 
     setIsStarting(true); setError('');
-    try { await initializeAIGame(); }
+    try {
+      await initializeAIGame();
+      // Success — reload to show game (config is saved to localStorage)
+      window.location.reload();
+    }
     catch (err: any) { setError(err.message || '初始化失败'); logger.error('[AISetup]', err); }
     finally { setIsStarting(false); }
   };

@@ -161,9 +161,15 @@ export class AIGameController {
     if (!this.engine) throw new Error('Game not initialized');
     if (this.state === AIGameState.CHOOSING) throw new Error('Choice pending');
 
-    // If in error state, try to recover by regenerating
+    // If in error state, reset engine and reinitialize
     if (this.state === AIGameState.ERROR) {
-      logger.info('[AI] Retrying after error...');
+      logger.info('[AI] Retrying after error — reinitializing...');
+      try {
+        this.engine?.reset();
+        await this.initializeGame();
+      } catch (e: any) {
+        logger.error('[AI] Reinit failed:', e);
+      }
     }
 
     this.setState(AIGameState.GENERATING);
