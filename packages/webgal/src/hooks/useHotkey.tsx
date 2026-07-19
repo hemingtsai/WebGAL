@@ -157,7 +157,7 @@ export function useMouseWheel() {
  * Panic Button, use Esc and Backquote
  */
 export function usePanic() {
-  const panicButtonList = ['Escape', 'Backquote'];
+  const panicButtonList = ['Backquote'];
   const isPanicButton = (ev: KeyboardEvent) =>
     !ev.isComposing && !ev.defaultPrevented && panicButtonList.includes(ev.code);
   const GUIStore = useGenSyncRef((state: RootState) => state.GUI);
