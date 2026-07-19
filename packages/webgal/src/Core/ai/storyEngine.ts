@@ -174,6 +174,54 @@ export class AIStoryEngine {
   }
 
   /**
+   * User selects a choice with streaming continuation.
+   */
+  async selectChoiceStreaming(
+    optionIndex: number,
+    onTextChunk: (text: string) => void,
+  ): Promise<StoryGenerationOutput> {
+    if (!this.currentChoicePoint) {
+      throw new Error('No choice point is active');
+    }
+
+    if (optionIndex < 0 || optionIndex >= this.currentChoicePoint.options.length) {
+      throw new Error(`Invalid choice index: ${optionIndex}`);
+    }
+
+    const selectedOption = this.currentChoicePoint.options[optionIndex];
+
+    this.addHistoryEvent({
+      id: uuidv4(),
+      type: 'choice',
+      content: `【选择】${selectedOption.text}`,
+    });
+
+    this.addHistoryEvent({
+      id: uuidv4(),
+      type: 'system',
+      content: selectedOption.consequence || '',
+    });
+
+    if (selectedOption.sceneId) {
+      this.state.currentSceneId = selectedOption.sceneId;
+      this.addHistoryEvent({
+        id: uuidv4(),
+        type: 'scene_change',
+        content: '',
+        sceneId: selectedOption.sceneId,
+      });
+    }
+
+    if (selectedOption.mood) {
+      this.state.mood = selectedOption.mood;
+    }
+
+    this.currentChoicePoint = null;
+
+    return this.generateNextSegmentStreaming(onTextChunk);
+  }
+
+  /**
    * Select/update images based on the latest generated text
    * Uses a smaller model for efficient image selection
    */

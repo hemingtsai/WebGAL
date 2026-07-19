@@ -195,16 +195,15 @@ export class AIGameController {
     this.showThinking();
 
     try {
-      // Record choice then generate
-      const output = await this.engine.selectChoice(optionIndex);
-      // Generate next with streaming
-      const nextOutput = await this.engine.generateNextSegmentStreaming(
+      // Use streaming version of selectChoice
+      const output = await this.engine!.selectChoiceStreaming(
+        optionIndex,
         (chunk: string) => {
           this.streamTextToStage(chunk);
         },
       );
-      await this.finalizeStreamedText(nextOutput);
-      return nextOutput;
+      await this.finalizeStreamedText(output);
+      return output;
     } catch (error: any) {
       this.handleError(error);
       return null;
