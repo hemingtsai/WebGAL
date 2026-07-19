@@ -29,9 +29,6 @@ import { logger } from '@/Core/util/logger';
 import { stageStateManager } from '@/Core/Modules/stage/stageStateManager';
 import { webgalStore } from '@/store/store';
 import { setVisibility } from '@/store/GUIReducer';
-import { createSaySentence } from './scriptConverter';
-import { runScript } from '@/Core/controller/gamePlay/runScript';
-import { stopAllPerform } from '@/Core/controller/gamePlay/stopAllPerform';
 import { showAIChoices, hideAIChoices } from '@/UI/AISetup/AIChoiceUI';
 import { getBGM } from './bgmManager';
 
@@ -235,12 +232,18 @@ export class AIGameController {
 
     const parsed = this.tryParseStreamingText(line);
 
-    // Use WebGAL's native say command for proper typewriter text animation
-    const sentence = createSaySentence(parsed.text, parsed.speaker || undefined);
-    // Stop previous line's animation, then start this one
-    stopAllPerform();
-    runScript(sentence);
-    WebGAL.gameplay.performController.commitPendingPerforms();
+    // Directly set text on stage state — WebGAL's TextBox component
+    // handles CSS text animation (character-by-character) automatically
+    // based on the user's text speed setting (useTextDelay).
+    // currentDialogKey change triggers animation restart.
+    stageStateManager.setStage('currentDialogKey', Math.random().toString());
+    stageStateManager.setStage('currentConcatDialogPrev', '');
+    stageStateManager.setStage('showText', parsed.text);
+    stageStateManager.setStage('showName', parsed.speaker);
+    stageStateManager.setStage('isDisableTextbox', false);
+    // Commit with notifyReact to trigger TextBox re-render + CSS animation
+    stageStateManager.commit({ notifyReact: true, syncPixiStage: false, applyPixiEffects: false });
+    webgalStore.dispatch(setVisibility({ component: 'showTextBox', visibility: true }));
 
     return this.pendingLineIndex < this.pendingLines.length;
   }
