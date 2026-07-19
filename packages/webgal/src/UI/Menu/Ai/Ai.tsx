@@ -1,8 +1,8 @@
 /**
- * AI Settings Panel (Native WebGAL Menu Tab)
+ * AI Settings Panel (Native WebGAL Style)
  *
- * Integrated into WebGAL's native menu system as a top-level tab.
- * Provides model selection, scheduling strategy, and parameter controls.
+ * Uses NormalOption, NormalButton, OptionSlider — same components
+ * as the built-in System/Display/Sound settings pages.
  */
 
 import React, { useState, useEffect } from 'react';
@@ -13,7 +13,11 @@ import { getAIGameController, AIGameState } from '@/Core/ai/gameController';
 import { getMemoryManager } from '@/Core/ai/memoryManager';
 import { getBGM } from '@/Core/ai/bgmManager';
 import { getConfiguredProviders } from '@/Core/ai/aiInitialize';
-import type { SchedulerConfig, TaskType, SchedulingStrategy, AIModel } from '@/Core/ai/types';
+import type { SchedulerConfig, TaskType, SchedulingStrategy } from '@/Core/ai/types';
+import { NormalOption } from '@/UI/Menu/Options/NormalOption';
+import { NormalButton } from '@/UI/Menu/Options/NormalButton';
+import { OptionSlider } from '@/UI/Menu/Options/OptionSlider';
+import { setStorage } from '@/Core/controller/storage/storageController';
 import styles from '../Options/options.module.scss';
 
 const TASK_LABELS: Record<TaskType, string> = {
@@ -23,9 +27,10 @@ const TASK_LABELS: Record<TaskType, string> = {
   initialize_world: '世界观初始化',
 };
 
+const STRATEGY_NAMES: SchedulingStrategy[] = ['fixed', 'ai_dispatch', 'cost_optimized', 'round_robin'];
 const STRATEGY_LABELS: Record<SchedulingStrategy, string> = {
   fixed: '固定映射',
-  ai_dispatch: 'AI 调度',
+  ai_dispatch: 'AI调度',
   cost_optimized: '成本优先',
   round_robin: '轮询',
 };
@@ -41,232 +46,177 @@ export function AiSettings() {
 
   const [config, setConfig] = useState<SchedulerConfig>(scheduler.getConfig());
   const [aiState, setAiState] = useState<AIGameState>(aiController.getState());
-  const [saved, setSaved] = useState(false);
+  const [bgmOn, setBgmOn] = useState(true);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setAiState(aiController.getState());
-    }, 1000);
+    const interval = setInterval(() => setAiState(aiController.getState()), 1000);
     return () => clearInterval(interval);
   }, []);
 
   const allModels = scheduler.getAllModels();
   const memStats = memory.getStats();
-  const [bgmOn, setBgmOn] = useState(true);
   const providers = getConfiguredProviders();
 
-  const handleSave = () => {
-    scheduler.updateConfig(config);
-    memory.updateConfig(memory.getConfig());
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
-
-  const updateTaskModel = (task: TaskType, modelId: string) => {
-    setConfig((prev) => ({
-      ...prev,
-      taskModelMapping: { ...prev.taskModelMapping, [task]: modelId || undefined as any },
-    }));
+  const applyAndSave = (updates: Partial<SchedulerConfig>) => {
+    const newConfig = { ...config, ...updates };
+    setConfig(newConfig);
+    scheduler.updateConfig(newConfig);
+    setStorage();
   };
 
   const stateColors: Record<string, string> = {
-    uninitialized: '#888',
-    configuring: '#ffaa00',
-    ready: '#44cc44',
-    generating: '#4488ff',
-    playing: '#44cc44',
-    choosing: '#ff6b9d',
-    error: '#ff4444',
+    uninitialized: '#888', configuring: '#ffaa00', ready: '#44cc44',
+    generating: '#4488ff', playing: '#44cc44', choosing: '#ff6b9d', error: '#ff4444',
   };
+
+  // Model list for NormalButton
+  const modelIds = allModels.map((m) => m.id);
+  const modelLabels = allModels.map((m) => `[${m.provider}] ${m.name}`);
+
+  // Strategy index for NormalButton
+  const strategyIndex = STRATEGY_NAMES.indexOf(config.strategy);
 
   return (
     <div className={styles.Options_main_content}>
       <div className={styles.Options_main_content_half}>
-        {/* Status */}
-        <div style={{ padding: '12px 16px', marginBottom: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+        {/* Status indicator */}
+        <NormalOption key="status" title="引擎状态">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 0', fontSize: '150%', color: '#aaa' }}>
             <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: stateColors[aiState] || '#888', display: 'inline-block' }} />
-            <span>引擎状态: {aiState}</span>
+            <span>{aiState}</span>
+            <span style={{ marginLeft: '12px', fontSize: '80%' }}>
+              {allModels.length}模型 | {providers.join(',') || '无'} | 记忆摘要{memStats.summaryCount}
+            </span>
           </div>
-          <div style={{ fontSize: '12px', color: '#999' }}>
-            已注册模型: {allModels.length} | 提供者: {providers.join(', ') || '无'} |
-            记忆摘要: {memStats.summaryCount}
-          </div>
-        </div>
+        </NormalOption>
 
         {/* Scheduling Strategy */}
-        <div style={optionFieldStyle}>
-          <div style={labelStyle}>调度策略</div>
-          <select
-            value={config.strategy}
-            onChange={(e) => setConfig({ ...config, strategy: e.target.value as SchedulingStrategy })}
-            style={selectStyle}
-          >
-            {Object.entries(STRATEGY_LABELS).map(([v, l]) => (
-              <option key={v} value={v}>{l}</option>
-            ))}
-          </select>
-        </div>
+        <NormalOption key="strategy" title="调度策略">
+          <NormalButton
+            textList={STRATEGY_NAMES.map((s) => STRATEGY_LABELS[s])}
+            functionList={STRATEGY_NAMES.map((s) => () => applyAndSave({ strategy: s }))}
+            currentChecked={strategyIndex}
+          />
+        </NormalOption>
 
         {/* Default Model */}
-        <div style={optionFieldStyle}>
-          <div style={labelStyle}>默认模型</div>
-          <select
-            value={config.defaultModel}
-            onChange={(e) => setConfig({ ...config, defaultModel: e.target.value })}
-            style={selectStyle}
-          >
-            {allModels.map((m) => (
-              <option key={m.id} value={m.id}>
-                [{m.provider}] {m.name}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Task Model Mapping */}
-        <div style={{ ...optionFieldStyle, marginBottom: '8px' }}>
-          <div style={{ ...labelStyle, fontWeight: 'bold', marginBottom: '8px' }}>任务模型分配</div>
-          {(Object.keys(TASK_LABELS) as TaskType[]).map((task) => (
-            <div key={task} style={{ marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ minWidth: '80px', fontSize: '12px', color: '#aaa' }}>{TASK_LABELS[task]}</span>
-              <select
-                value={config.taskModelMapping[task] || ''}
-                onChange={(e) => updateTaskModel(task, e.target.value)}
-                style={{ ...selectStyle, flex: 1 }}
-              >
-                <option value="">默认</option>
-                {allModels.map((m) => (
-                  <option key={m.id} value={m.id}>[{m.provider}] {m.name}</option>
-                ))}
-              </select>
-            </div>
-          ))}
-        </div>
-
-        {/* Scheduler Model (for AI dispatch) */}
-        {config.strategy === 'ai_dispatch' && (
-          <div style={optionFieldStyle}>
-            <div style={labelStyle}>调度器模型</div>
-            <select
-              value={config.schedulerModel || ''}
-              onChange={(e) => setConfig({ ...config, schedulerModel: e.target.value || undefined })}
-              style={selectStyle}
-            >
-              <option value="">使用默认模型</option>
-              {allModels.filter((m) => m.capabilities.includes('scheduling')).map((m) => (
-                <option key={m.id} value={m.id}>[{m.provider}] {m.name}</option>
-              ))}
-            </select>
-          </div>
+        {allModels.length > 0 && (
+          <NormalOption key="defaultModel" title="默认模型">
+            <NormalButton
+              textList={modelLabels}
+              functionList={modelIds.map((id) => () => applyAndSave({ defaultModel: id }))}
+              currentChecked={modelIds.indexOf(config.defaultModel)}
+            />
+          </NormalOption>
         )}
 
-        {/* Retries & Timeout */}
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <div style={{ ...optionFieldStyle, flex: 1 }}>
-            <div style={labelStyle}>重试次数</div>
-            <input
-              type="number" min={0} max={5}
-              value={config.maxRetries}
-              onChange={(e) => setConfig({ ...config, maxRetries: parseInt(e.target.value) || 0 })}
-              style={inputStyle}
-            />
-          </div>
-          <div style={{ ...optionFieldStyle, flex: 1 }}>
-            <div style={labelStyle}>超时 (ms)</div>
-            <input
-              type="number" min={5000} max={300000} step={5000}
-              value={config.timeoutMs}
-              onChange={(e) => setConfig({ ...config, timeoutMs: parseInt(e.target.value) || 60000 })}
-              style={inputStyle}
-            />
-          </div>
-        </div>
+        {/* Task Model Assignments */}
+        {(Object.keys(TASK_LABELS) as TaskType[]).map((task) => {
+          const currentModel = config.taskModelMapping[task] || config.defaultModel;
+          const idx = modelIds.indexOf(currentModel);
+          const capableModels = allModels.filter((m) => m.capabilities.includes(task as any));
+          const capableIds = capableModels.map((m) => m.id);
+          const capableLabels = capableModels.map((m) => `[${m.provider}] ${m.name}`);
+          // Add "default" option at the start
+          const allLabels = ['默认', ...capableLabels];
+          const allIds = ['', ...capableIds];
 
-        {/* Memory Settings */}
-        <div style={{ ...optionFieldStyle, marginTop: '16px', paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-          <div style={{ ...labelStyle, fontWeight: 'bold' }}>🧠 记忆管理</div>
-          <div style={{ fontSize: '12px', color: '#999', marginBottom: '8px' }}>
-            当故事历史过长时自动摘要，防止超出 token 限制。
-          </div>
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '11px', color: '#888', marginBottom: '4px' }}>保留最近事件数</div>
-              <input
-                type="number" min={5} max={100}
-                value={memory.getConfig().maxRecentEvents}
-                onChange={(e) => memory.updateConfig({ maxRecentEvents: parseInt(e.target.value) || 20 })}
-                style={inputStyle}
+          return (
+            <NormalOption key={`task_${task}`} title={`任务: ${TASK_LABELS[task]}`}>
+              <NormalButton
+                textList={allLabels}
+                functionList={allIds.map((id) => () => {
+                  const newMapping = { ...config.taskModelMapping };
+                  if (id) {
+                    newMapping[task] = id;
+                  } else {
+                    delete newMapping[task];
+                  }
+                  applyAndSave({ taskModelMapping: newMapping });
+                })}
+                currentChecked={allIds.indexOf(currentModel)}
               />
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: '11px', color: '#888', marginBottom: '4px' }}>最大上下文 tokens</div>
-              <input
-                type="number" min={1000} max={64000} step={1000}
-                value={memory.getConfig().maxContextTokens}
-                onChange={(e) => memory.updateConfig({ maxContextTokens: parseInt(e.target.value) || 8000 })}
-                style={inputStyle}
-              />
-            </div>
-          </div>
-        </div>
+            </NormalOption>
+          );
+        })}
 
-        {/* BGM */}
-        <div style={{ ...optionFieldStyle, marginTop: '12px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={labelStyle}>🎵 AI 情绪 BGM</div>
-            <button
-              onClick={() => {
-                bgm.setEnabled(!bgmOn);
-                setBgmOn(!bgmOn);
-              }}
-              style={{
-                padding: '4px 12px', borderRadius: '12px', border: 'none', cursor: 'pointer',
-                background: bgmOn ? 'rgba(68,204,68,0.3)' : 'rgba(255,255,255,0.1)',
-                color: bgmOn ? '#4c4' : '#888', fontSize: '12px',
-              }}
-            >
-              {bgmOn ? '已开启' : '已关闭'}
-            </button>
-          </div>
-        </div>
+        {/* AI Dispatch Scheduler Model */}
+        {config.strategy === 'ai_dispatch' && (
+          <NormalOption key="schedulerModel" title="调度器模型">
+            <NormalButton
+              textList={['默认', ...allModels.filter((m) => m.capabilities.includes('scheduling')).map((m) => `[${m.provider}] ${m.name}`)]}
+              functionList={['', ...allModels.filter((m) => m.capabilities.includes('scheduling')).map((m) => m.id)].map((id) => () => {
+                applyAndSave({ schedulerModel: id || undefined });
+              })}
+              currentChecked={['', ...allModels.filter((m) => m.capabilities.includes('scheduling')).map((m) => m.id)].indexOf(config.schedulerModel || '')}
+            />
+          </NormalOption>
+        )}
 
-        {/* Save Button */}
-        <button
-          onClick={handleSave}
-          style={{
-            width: '100%', padding: '12px', marginTop: '16px',
-            borderRadius: '8px', border: 'none', cursor: 'pointer',
-            fontSize: '14px', fontWeight: 'bold',
-            background: saved ? 'rgba(68,204,68,0.3)' : 'linear-gradient(135deg, #c44dff, #ff6b9d)',
-            color: '#fff',
-          }}
-        >
-          {saved ? '✅ 已保存' : '💾 保存 AI 设置'}
-        </button>
+        {/* Max Retries */}
+        <NormalOption key="retries" title="最大重试次数">
+          <OptionSlider
+            initValue={config.maxRetries}
+            uniqueID="ai-retries"
+            min={0}
+            max={5}
+            onChange={(e) => applyAndSave({ maxRetries: Number(e.target.value) })}
+          />
+        </NormalOption>
+
+        {/* Timeout */}
+        <NormalOption key="timeout" title="API 超时 (秒)">
+          <OptionSlider
+            initValue={Math.round(config.timeoutMs / 1000)}
+            uniqueID="ai-timeout"
+            min={5}
+            max={120}
+            onChange={(e) => applyAndSave({ timeoutMs: Number(e.target.value) * 1000 })}
+          />
+        </NormalOption>
+
+        {/* Memory: max recent events */}
+        <NormalOption key="memEvents" title="记忆: 保留最近事件数">
+          <OptionSlider
+            initValue={memory.getConfig().maxRecentEvents}
+            uniqueID="ai-mem-events"
+            min={5}
+            max={100}
+            onChange={(e) => {
+              memory.updateConfig({ maxRecentEvents: Number(e.target.value) });
+              setStorage();
+            }}
+          />
+        </NormalOption>
+
+        {/* Memory: max context tokens */}
+        <NormalOption key="memTokens" title="记忆: 最大上下文 tokens">
+          <OptionSlider
+            initValue={Math.round(memory.getConfig().maxContextTokens / 1000)}
+            uniqueID="ai-mem-tokens"
+            min={1}
+            max={64}
+            onChange={(e) => {
+              memory.updateConfig({ maxContextTokens: Number(e.target.value) * 1000 });
+              setStorage();
+            }}
+          />
+        </NormalOption>
+
+        {/* BGM Mood Toggle */}
+        <NormalOption key="bgm" title="AI 情绪 BGM">
+          <NormalButton
+            textList={['开启', '关闭']}
+            functionList={[
+              () => { bgm.setEnabled(true); setBgmOn(true); },
+              () => { bgm.setEnabled(false); setBgmOn(false); },
+            ]}
+            currentChecked={bgmOn ? 0 : 1}
+          />
+        </NormalOption>
       </div>
     </div>
   );
 }
-
-const labelStyle: React.CSSProperties = {
-  fontSize: '12px', color: '#aaa', marginBottom: '4px',
-};
-
-const selectStyle: React.CSSProperties = {
-  width: '100%', padding: '8px 10px', borderRadius: '6px',
-  border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(0,0,0,0.3)',
-  color: '#fff', fontSize: '13px', boxSizing: 'border-box',
-};
-
-const inputStyle: React.CSSProperties = {
-  width: '100%', padding: '8px 10px', borderRadius: '6px',
-  border: '1px solid rgba(255,255,255,0.15)', background: 'rgba(0,0,0,0.3)',
-  color: '#fff', fontSize: '13px', boxSizing: 'border-box',
-};
-
-const optionFieldStyle: React.CSSProperties = {
-  marginBottom: '10px',
-};
 
 export default AiSettings;
